@@ -16,6 +16,53 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 export const stripeRouter = Router();
 
+// Refund an order by its payment intent ID
+export async function refundOrder(paymentIntentId: string): Promise<{ success: boolean; refundId?: string; error?: string }> {
+  try {
+    if (!paymentIntentId) {
+      return { success: false, error: "No payment intent ID" };
+    }
+    const refund = await stripe.refunds.create({
+      payment_intent: paymentIntentId,
+    });
+    console.log(`[Stripe] Refund created: ${refund.id} for payment intent: ${paymentIntentId}`);
+    return { success: true, refundId: refund.id };
+  } catch (err: any) {
+    console.error(`[Stripe] Refund failed for ${paymentIntentId}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Capture an authorized payment
+export async function capturePayment(paymentIntentId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!paymentIntentId) {
+      return { success: false, error: "No payment intent ID" };
+    }
+    await stripe.paymentIntents.capture(paymentIntentId);
+    console.log(`[Stripe] Payment captured for: ${paymentIntentId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Stripe] Capture failed for ${paymentIntentId}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Cancel an authorized payment (release the hold)
+export async function cancelPayment(paymentIntentId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!paymentIntentId) {
+      return { success: false, error: "No payment intent ID" };
+    }
+    await stripe.paymentIntents.cancel(paymentIntentId);
+    console.log(`[Stripe] Payment cancelled (hold released) for: ${paymentIntentId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Stripe] Cancel failed for ${paymentIntentId}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // Helper: calculate delivery fee server-side for validation
 async function calculateDeliveryFeeServer(address: string): Promise<{ fee: number; withinRadius: boolean; distance: number }> {
   // Geocode the address using Nominatim
@@ -173,6 +220,9 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
       success_url: `https://orderprimosfood.com/confirmation/${orderNumber}`,
       cancel_url: `https://orderprimosfood.com/checkout`,
       customer_email: customerEmail || undefined,
+      payment_intent_data: {
+        capture_method: "manual",
+      },
       metadata: {
         orderNumber,
         customerName,
@@ -247,7 +297,7 @@ stripeRouter.post(
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        console.log(`[Stripe Webhook] Payment successful for session: ${session.id}`);
+        console.log(`[Stripe Webhook] Payment authorized for session: ${session.id}`);
 
         try {
           const db = await getDb();
@@ -256,9 +306,9 @@ stripeRouter.post(
             break;
           }
 
-          // Update order payment status
+          // Update order payment status to "authorized" (not captured yet)
           await db.update(orders).set({
-            paymentStatus: "paid",
+            paymentStatus: "authorized",
             stripePaymentIntentId: session.payment_intent as string,
           }).where(eq(orders.stripeSessionId, session.id));
 
@@ -268,7 +318,7 @@ stripeRouter.post(
             .limit(1);
 
           if (order) {
-            // Handle loyalty redemption
+            // Handle loyalty redemption (deduct stamps immediately since customer committed)
             if (session.metadata?.redeemStamps === "true" && order.customerEmail) {
               try {
                 await redeemLoyaltyStamps(order.customerEmail);
@@ -277,18 +327,7 @@ stripeRouter.post(
               }
             }
 
-            // Award loyalty stamp if actual spend (subtotal minus discounts, excluding delivery) >= £30
-            const actualSpend = parseFloat(order.subtotal) - parseFloat(order.discountAmount || "0");
-            if (order.customerEmail && actualSpend >= 30) {
-              try {
-                const loyalty = await awardLoyaltyStamp(order.customerEmail);
-                if (loyalty) {
-                  await markLoyaltyStampsAwarded(order.id);
-                }
-              } catch (e) {
-                console.warn("[Stripe Webhook] Loyalty award failed:", e);
-              }
-            }
+            // Do NOT award loyalty stamps yet — wait until payment is captured (staff accepts)
 
             // Notify kitchen dashboard via SSE
             notifyNewOrder(order);

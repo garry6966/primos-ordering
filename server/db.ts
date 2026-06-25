@@ -1,4 +1,4 @@
-import { eq, asc, desc, and, sql } from "drizzle-orm";
+import { eq, asc, desc, and, sql, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, menuCategories, menuItems, pizzaToppings, orders, reviews, loyaltyAccounts, offers, deliverySettings } from "../drizzle/schema";
 
@@ -191,7 +191,7 @@ export async function createOrder(data: {
   notes?: string;
   loyaltyRedemption?: boolean;
   stripeSessionId?: string;
-  paymentStatus?: "pending" | "paid" | "failed";
+  paymentStatus?: "pending" | "paid" | "failed" | "authorized" | "cancelled";
   discountPercent?: number;
   discountAmount?: string;
 }) {
@@ -249,6 +249,29 @@ export async function markLoyaltyStampsAwarded(orderId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(orders).set({ loyaltyStampsAwarded: true }).where(eq(orders.id, orderId));
+}
+
+// ========== Payment status helpers ==========
+export async function updateOrderPaymentStatus(orderId: number, paymentStatus: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(orders).set({ paymentStatus }).where(eq(orders.id, orderId));
+  const result = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  return result[0];
+}
+
+export async function getStaleAuthorizedOrders(minutesOld: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const cutoff = new Date(Date.now() - minutesOld * 60 * 1000);
+  return db.select().from(orders)
+    .where(
+      and(
+        eq(orders.status, "pending_acceptance"),
+        eq(orders.paymentStatus, "authorized"),
+        lt(orders.createdAt, cutoff)
+      )
+    );
 }
 
 // ========== Reviews queries ==========

@@ -17,7 +17,9 @@ import {
 import OpenAI from "openai";
 import { nanoid } from "nanoid";
 import { notifyNewOrder } from "./index";
-import { sendOrderNotificationEmail, sendReviewRequestEmail } from "./email";
+import { sendOrderNotificationEmail, sendReviewRequestEmail, sendOrderRejectionEmail } from "./email";
+import { capturePayment, cancelPayment } from "./stripe";
+import { updateOrderPaymentStatus } from "./db";
 
 const t = initTRPC.context<{ req: any; res: any; user: any }>().create({
   transformer: superjson,
@@ -213,6 +215,51 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const order = await updateOrderStatus(input.id, input.status);
+
+        // --- ACCEPT: capture payment ---
+        if (input.status === "new" && order && order.stripePaymentIntentId && order.paymentStatus === "authorized") {
+          const captureResult = await capturePayment(order.stripePaymentIntentId);
+          if (captureResult.success) {
+            await updateOrderPaymentStatus(order.id, "paid");
+            console.log(`[Payment] Captured for order ${order.orderNumber}`);
+
+            // Award loyalty stamp now that payment is captured
+            const actualSpend = parseFloat(order.subtotal) - parseFloat(order.discountAmount || "0");
+            if (order.customerEmail && actualSpend >= 30 && !order.loyaltyStampsAwarded) {
+              try {
+                const loyalty = await awardLoyaltyStamp(order.customerEmail);
+                if (loyalty) {
+                  await markLoyaltyStampsAwarded(order.id);
+                }
+              } catch (e) {
+                console.warn("[Loyalty] Award failed:", e);
+              }
+            }
+          } else {
+            console.error(`[Payment] Capture failed for ${order.orderNumber}: ${captureResult.error}`);
+            throw new Error(`Payment capture failed: ${captureResult.error}`);
+          }
+        }
+
+        // --- REJECT: cancel payment ---
+        if (input.status === "rejected" && order && order.stripePaymentIntentId && order.paymentStatus === "authorized") {
+          const cancelResult = await cancelPayment(order.stripePaymentIntentId);
+          if (cancelResult.success) {
+            await updateOrderPaymentStatus(order.id, "cancelled");
+            console.log(`[Payment] Cancelled (hold released) for order ${order.orderNumber}`);
+          } else {
+            console.error(`[Payment] Cancel failed for ${order.orderNumber}: ${cancelResult.error}`);
+          }
+
+          // Send rejection email to customer
+          if (order.customerEmail) {
+            sendOrderRejectionEmail({
+              orderNumber: order.orderNumber,
+              customerName: order.customerName,
+              customerEmail: order.customerEmail,
+            }).catch(err => console.error("[Email] Rejection email failed:", err));
+          }
+        }
 
         // Schedule review request email 2 hours after order completion
         if ((input.status === "delivered" || input.status === "collected") && order && order.customerEmail && !order.reviewEmailSent) {

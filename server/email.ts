@@ -415,6 +415,99 @@ Primo's · 6 Groathill Road North, Edinburgh EH4 2SW · 0131 563 4457
 `;
 }
 
+// ========== Order Rejection Email ==========
+export interface OrderRejectionEmailData {
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+}
+
+function buildRejectionEmailHtml(data: OrderRejectionEmailData): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Order Update &ndash; ${data.orderNumber}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:24px 0;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#E31837;padding:24px 28px;text-align:center;">
+            <div style="font-size:34px;font-weight:900;font-style:italic;color:#ffffff;letter-spacing:-1px;">PRIMO&apos;S</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:4px;">Order Update</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;">
+            <div style="font-size:18px;font-weight:700;color:#111;margin-bottom:12px;">Hi ${data.customerName},</div>
+            <div style="font-size:14px;color:#555;line-height:1.6;margin-bottom:16px;">
+              We&apos;re sorry but we&apos;re unable to accept your order <strong>${data.orderNumber}</strong> at this moment.
+            </div>
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 18px;margin-bottom:16px;">
+              <div style="font-size:14px;font-weight:600;color:#166534;">Your card has NOT been charged.</div>
+              <div style="font-size:13px;color:#15803d;margin-top:4px;">The hold on your card will be released shortly.</div>
+            </div>
+            <div style="font-size:14px;color:#555;line-height:1.6;margin-bottom:8px;">
+              Please try again later or call us on <strong>0131 563 4457</strong>.
+            </div>
+            <div style="font-size:14px;color:#555;line-height:1.6;">We apologise for any inconvenience.</div>
+            <div style="font-size:14px;color:#333;font-weight:600;margin-top:20px;">&mdash; Primo&apos;s Kitchen</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px;text-align:center;border-top:1px solid #f0f0f0;">
+            <div style="font-size:12px;color:#aaa;">6 Groathill Road North, Edinburgh EH4 2SW</div>
+            <div style="font-size:12px;color:#aaa;margin-top:2px;">0131 563 4457 &middot; orderprimos@gmail.com</div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildRejectionPlainText(data: OrderRejectionEmailData): string {
+  return `Hi ${data.customerName},\n\nWe're sorry but we're unable to accept your order ${data.orderNumber} at this moment.\n\nYour card has NOT been charged. The hold on your card will be released shortly.\n\nPlease try again later or call us on 0131 563 4457.\n\nWe apologise for any inconvenience.\n\n\u2014 Primo's Kitchen\n6 Groathill Road North, Edinburgh EH4 2SW\n0131 563 4457\n`;
+}
+
+export async function sendOrderRejectionEmail(data: OrderRejectionEmailData): Promise<boolean> {
+  const resend = getResend();
+  if (!resend) return false;
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: data.customerEmail,
+      subject: `Order Update \u2014 ${data.orderNumber}`,
+      text: buildRejectionPlainText(data),
+      html: buildRejectionEmailHtml(data),
+    });
+
+    if (error) {
+      console.error("[Email] Rejection email send error:", error);
+      return false;
+    }
+
+    // Also notify the owner
+    await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: NOTIFY_EMAIL,
+      subject: `Order Rejected \u2014 ${data.orderNumber}`,
+      text: `Order ${data.orderNumber} for ${data.customerName} has been rejected. Payment hold released.`,
+    });
+
+    console.log(`[Email] Rejection email sent for ${data.orderNumber} to ${data.customerEmail}`);
+    return true;
+  } catch (err) {
+    console.error("[Email] Failed to send rejection email:", err);
+    return false;
+  }
+}
+
 export async function sendReviewRequestEmail(data: ReviewRequestEmailData): Promise<boolean> {
   const resend = getResend();
   if (!resend) return false;

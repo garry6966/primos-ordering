@@ -2,7 +2,7 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CheckCircle, Clock, MapPin, Phone, Truck, Store, Stamp, CreditCard } from "lucide-react";
+import { CheckCircle, Clock, MapPin, Phone, Truck, Store, Stamp, CreditCard, XCircle, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
 
 export default function Confirmation() {
@@ -17,36 +17,132 @@ export default function Confirmation() {
 
   const orderItems = order ? (order.items as any[]) : [];
 
+  // Determine the display state
+  const paymentStatus = order ? (order as any).paymentStatus : null;
+  const orderStatus = order ? order.status : null;
+
+  const isWaitingForAcceptance = orderStatus === "pending_acceptance" && (paymentStatus === "authorized" || paymentStatus === "pending");
+  const isConfirmed = ["new", "preparing", "ready", "delivered", "collected"].includes(orderStatus || "") && paymentStatus === "paid";
+  const isRejected = orderStatus === "rejected" && paymentStatus === "cancelled";
+  const isPending = paymentStatus === "pending" && orderStatus === "pending_acceptance";
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
       <div className="container py-8 max-w-lg">
-        <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+        {/* === WAITING FOR RESTAURANT ACCEPTANCE === */}
+        {isWaitingForAcceptance && !isPending && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
+            </div>
+
+            <h1 className="text-2xl font-bold mb-2">Order Placed!</h1>
+            <p className="text-gray-600 mb-1">Waiting for restaurant to confirm...</p>
+            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
+              {params.orderNumber}
+            </p>
+
+            <div className="mt-4 flex items-center justify-center gap-1.5 text-orange-600 text-sm font-medium">
+              <Clock className="w-4 h-4" />
+              Your card has been authorized — you will only be charged once the restaurant accepts.
+            </div>
+
+            {/* Pulsing indicator */}
+            <div className="mt-4 flex justify-center">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+              </span>
+            </div>
           </div>
+        )}
 
-          <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
-          <p className="text-gray-600 mb-1">Thank you for your order</p>
-          <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-            {params.orderNumber}
-          </p>
+        {/* === ORDER CONFIRMED (payment captured) === */}
+        {isConfirmed && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
 
-          {/* Payment status */}
-          {order && (order as any).paymentStatus === "paid" && (
+            <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
+            <p className="text-gray-600 mb-1">Thank you for your order</p>
+            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
+              {params.orderNumber}
+            </p>
+
             <div className="mt-3 flex items-center justify-center gap-1.5 text-green-600 text-sm font-medium">
               <CreditCard className="w-4 h-4" />
               Payment confirmed
             </div>
-          )}
-          {order && (order as any).paymentStatus === "pending" && (
+          </div>
+        )}
+
+        {/* === ORDER REJECTED (payment cancelled) === */}
+        {isRejected && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+
+            <h1 className="text-2xl font-bold mb-2 text-red-700">Order Not Accepted</h1>
+            <p className="text-gray-600 mb-1">Sorry, we're unable to accept your order at this moment.</p>
+            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
+              {params.orderNumber}
+            </p>
+
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
+              Your card has NOT been charged. The hold has been released.
+            </div>
+
+            <p className="mt-3 text-sm text-gray-500">
+              Please try again later or call us on 0131 563 4457.
+            </p>
+          </div>
+        )}
+
+        {/* === STILL PROCESSING (payment pending, webhook not fired yet) === */}
+        {isPending && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+            </div>
+
+            <h1 className="text-2xl font-bold mb-2">Processing Payment...</h1>
+            <p className="text-gray-600 mb-1">Please wait while we confirm your payment</p>
+            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
+              {params.orderNumber}
+            </p>
+
             <div className="mt-3 flex items-center justify-center gap-1.5 text-amber-600 text-sm font-medium">
               <Clock className="w-4 h-4" />
               Payment processing...
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* === FALLBACK: old orders with paymentStatus "paid" still pending === */}
+        {order && !isWaitingForAcceptance && !isConfirmed && !isRejected && !isPending && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+
+            <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
+            <p className="text-gray-600 mb-1">Thank you for your order</p>
+            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
+              {params.orderNumber}
+            </p>
+
+            {paymentStatus === "paid" && (
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-green-600 text-sm font-medium">
+                <CreditCard className="w-4 h-4" />
+                Payment confirmed
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Order Summary */}
         {order && (
@@ -121,8 +217,8 @@ export default function Confirmation() {
           </div>
         )}
 
-        {/* Loyalty Stamp Earned */}
-        {order && order.customerEmail && (parseFloat(order.subtotal) - parseFloat(order.discountAmount || "0")) >= 30 && (
+        {/* Loyalty Stamp Earned — only show when payment is confirmed */}
+        {order && isConfirmed && order.customerEmail && (parseFloat(order.subtotal) - parseFloat(order.discountAmount || "0")) >= 30 && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
               <Stamp className="w-5 h-5 text-amber-700" />
@@ -134,34 +230,36 @@ export default function Confirmation() {
           </div>
         )}
 
-        {/* Info Cards */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-            <Clock className="w-5 h-5 text-[#E31837] mt-0.5" />
-            <div>
-              <p className="font-semibold text-sm">Estimated Time</p>
-              <p className="text-sm text-gray-600">
-                {order?.orderType === "delivery" ? "35 – 50 minutes" : "20 – 30 minutes"}
-              </p>
+        {/* Info Cards — hide if rejected */}
+        {!isRejected && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4 mt-4">
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              <Clock className="w-5 h-5 text-[#E31837] mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">Estimated Time</p>
+                <p className="text-sm text-gray-600">
+                  {order?.orderType === "delivery" ? "35 – 50 minutes" : "20 – 30 minutes"}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-            <MapPin className="w-5 h-5 text-[#E31837] mt-0.5" />
-            <div>
-              <p className="font-semibold text-sm">Restaurant</p>
-              <p className="text-sm text-gray-600">6 Groathill Road North, Edinburgh EH4 2SW</p>
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              <MapPin className="w-5 h-5 text-[#E31837] mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">Restaurant</p>
+                <p className="text-sm text-gray-600">6 Groathill Road North, Edinburgh EH4 2SW</p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-            <Phone className="w-5 h-5 text-[#E31837] mt-0.5" />
-            <div>
-              <p className="font-semibold text-sm">Questions?</p>
-              <p className="text-sm text-gray-600">Call us on 0131 563 4457</p>
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              <Phone className="w-5 h-5 text-[#E31837] mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">Questions?</p>
+                <p className="text-sm text-gray-600">Call us on 0131 563 4457</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <Button
           onClick={() => navigate("/")}

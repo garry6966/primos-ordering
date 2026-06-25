@@ -3,11 +3,52 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send } from "lucide-react";
+import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_FLOW = ["pending_acceptance", "new", "preparing", "ready", "delivered", "collected"] as const;
 type OrderStatus = (typeof STATUS_FLOW)[number] | "rejected";
+
+const AUTO_REJECT_MINUTES = 15;
+
+function CountdownTimer({ createdAt }: { createdAt: Date | string }) {
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    const created = new Date(createdAt).getTime();
+    const deadline = created + AUTO_REJECT_MINUTES * 60 * 1000;
+    return Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const created = new Date(createdAt).getTime();
+      const deadline = created + AUTO_REJECT_MINUTES * 60 * 1000;
+      const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  if (timeLeft <= 0) {
+    return (
+      <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-red-600">
+        <Timer className="w-3 h-3" />
+        <span>Auto-rejected</span>
+      </div>
+    );
+  }
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const isUrgent = timeLeft < 120;
+
+  return (
+    <div className={`mt-1 flex items-center gap-1 text-xs font-semibold ${isUrgent ? "text-red-600 animate-pulse" : "text-orange-600"}`}>
+      <Timer className="w-3 h-3" />
+      <span>Auto-reject in {minutes}:{seconds.toString().padStart(2, "0")}</span>
+    </div>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending_acceptance: "Awaiting Acceptance",
@@ -196,7 +237,7 @@ export default function Kitchen() {
   // Check for pending_acceptance orders and manage alert
   useEffect(() => {
     if (!orders || !authenticated) return;
-    const pendingOrders = orders.filter(o => o.status === "pending_acceptance" && o.paymentStatus === "paid");
+    const pendingOrders = orders.filter(o => o.status === "pending_acceptance" && (o.paymentStatus === "authorized" || o.paymentStatus === "paid"));
     if (pendingOrders.length > 0 && soundEnabled) {
       startAlert();
     } else {
@@ -463,8 +504,8 @@ export default function Kitchen() {
     setDeliveryTiers(deliveryTiers.filter((_, i) => i !== index));
   };
 
-  const pendingAcceptanceOrders = orders?.filter(o => o.status === "pending_acceptance" && o.paymentStatus === "paid") || [];
-  const activeOrders = orders?.filter(o => ["new", "preparing", "ready"].includes(o.status) && o.paymentStatus === "paid") || [];
+  const pendingAcceptanceOrders = orders?.filter(o => o.status === "pending_acceptance" && (o.paymentStatus === "authorized" || o.paymentStatus === "paid")) || [];
+  const activeOrders = orders?.filter(o => ["new", "preparing", "ready"].includes(o.status) && (o.paymentStatus === "paid" || o.paymentStatus === "authorized")) || [];
   const completedOrders = orders?.filter(o => o.status === "delivered" || o.status === "collected") || [];
 
   return (
@@ -601,6 +642,8 @@ export default function Kitchen() {
                             <span className="flex items-center gap-1"><Store className="w-3 h-3" /> Collection</span>
                           )}
                         </div>
+                        {/* Auto-rejection countdown */}
+                        <CountdownTimer createdAt={order.createdAt} />
                       </div>
 
                       {/* Order Items */}

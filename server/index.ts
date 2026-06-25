@@ -563,6 +563,52 @@ async function startServer() {
   const port = parseInt(process.env.PORT || "3000");
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on port ${port}`);
+
+    // Auto-rejection timer: check every 60 seconds for stale authorized orders (>15 min old)
+    setInterval(async () => {
+      try {
+        const { getStaleAuthorizedOrders, updateOrderPaymentStatus, updateOrderStatus } = await import("./db");
+        const { cancelPayment } = await import("./stripe");
+        const { sendOrderRejectionEmail } = await import("./email");
+
+        const staleOrders = await getStaleAuthorizedOrders(15);
+        for (const order of staleOrders) {
+          console.log(`[Auto-Reject] Order ${order.orderNumber} expired (>15 min with no action)`);
+
+          // Cancel the payment hold
+          if (order.stripePaymentIntentId) {
+            const result = await cancelPayment(order.stripePaymentIntentId);
+            if (result.success) {
+              console.log(`[Auto-Reject] Payment hold released for ${order.orderNumber}`);
+            } else {
+              console.error(`[Auto-Reject] Failed to cancel payment for ${order.orderNumber}: ${result.error}`);
+            }
+          }
+
+          // Update order status to rejected and payment status to cancelled
+          await updateOrderStatus(order.id, "rejected");
+          await updateOrderPaymentStatus(order.id, "cancelled");
+
+          // Send rejection email to customer
+          if (order.customerEmail) {
+            sendOrderRejectionEmail({
+              orderNumber: order.orderNumber,
+              customerName: order.customerName,
+              customerEmail: order.customerEmail,
+            }).catch(err => console.error("[Auto-Reject] Email failed:", err));
+          }
+
+          // Notify kitchen dashboard that order was auto-rejected
+          notifyNewOrder({ ...order, status: "rejected", paymentStatus: "cancelled" });
+        }
+
+        if (staleOrders.length > 0) {
+          console.log(`[Auto-Reject] Processed ${staleOrders.length} expired order(s)`);
+        }
+      } catch (err) {
+        console.error("[Auto-Reject] Timer error:", err);
+      }
+    }, 60 * 1000); // Run every 60 seconds
   });
 }
 
