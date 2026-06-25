@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS menu_categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(100) NOT NULL UNIQUE,
+  description TEXT,
+  sortOrder INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS menu_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  categoryId INT NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  price DECIMAL(6,2) NOT NULL,
+  available BOOLEAN NOT NULL DEFAULT TRUE,
+  sortOrder INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pizza_toppings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  price DECIMAL(5,2) NOT NULL,
+  sortOrder INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  orderNumber VARCHAR(20) NOT NULL UNIQUE,
+  customerName VARCHAR(200) NOT NULL,
+  customerPhone VARCHAR(30) NOT NULL,
+  customerEmail VARCHAR(320),
+  orderType ENUM('delivery','collection') NOT NULL,
+  deliveryAddress TEXT,
+  deliveryFee DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  subtotal DECIMAL(8,2) NOT NULL,
+  total DECIMAL(8,2) NOT NULL,
+  status ENUM('new','preparing','ready','delivered','collected') NOT NULL DEFAULT 'new',
+  items JSON NOT NULL,
+  notes TEXT,
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
