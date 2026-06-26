@@ -644,7 +644,7 @@ export default function Kitchen() {
                       {/* Order Header */}
                       <div className="p-4 border-b border-orange-100 bg-orange-50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono font-bold text-sm">{order.orderNumber}</span>
+                          <span className="font-mono font-bold text-sm">{String(order.orderNumber || "")}</span>
                           <Badge className={`${STATUS_COLORS["pending_acceptance"]} border`}>
                             NEW ORDER
                           </Badge>
@@ -687,8 +687,8 @@ export default function Kitchen() {
 
                       {/* Customer Info */}
                       <div className="px-4 pb-3 text-xs text-gray-500 space-y-0.5">
-                        <p><strong>Name:</strong> {order.customerName}</p>
-                        <p><strong>Phone:</strong> {order.customerPhone}</p>
+                        <p><strong>Name:</strong> {String(order.customerName || "")}</p>
+                        <p><strong>Phone:</strong> {String(order.customerPhone || "")}</p>
                         {order.deliveryAddress && <p><strong>Address:</strong> {String(order.deliveryAddress)}</p>}
                         {order.notes && <p><strong>Notes:</strong> {String(order.notes)}</p>}
                       </div>
@@ -740,9 +740,9 @@ export default function Kitchen() {
                     {/* Order Header */}
                     <div className="p-4 border-b border-gray-100">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono font-bold text-sm">{order.orderNumber}</span>
+                        <span className="font-mono font-bold text-sm">{String(order.orderNumber || "")}</span>
                         <Badge className={`${STATUS_COLORS[order.status] || ""} border`}>
-                          {STATUS_LABELS[order.status] || order.status}
+                          {STATUS_LABELS[order.status] || String(order.status || "")}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -781,8 +781,8 @@ export default function Kitchen() {
 
                     {/* Customer Info */}
                     <div className="px-4 pb-3 text-xs text-gray-500 space-y-0.5">
-                      <p><strong>Name:</strong> {order.customerName}</p>
-                      <p><strong>Phone:</strong> {order.customerPhone}</p>
+                      <p><strong>Name:</strong> {String(order.customerName || "")}</p>
+                      <p><strong>Phone:</strong> {String(order.customerPhone || "")}</p>
                       {order.deliveryAddress && <p><strong>Address:</strong> {String(order.deliveryAddress)}</p>}
                       {order.notes && <p><strong>Notes:</strong> {String(order.notes)}</p>}
                     </div>
@@ -814,13 +814,13 @@ export default function Kitchen() {
                 {completedOrders.slice(-12).reverse().map(order => (
                   <div key={order.id} className="bg-white rounded-lg p-3 opacity-60">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-medium">{order.orderNumber}</span>
+                      <span className="font-mono text-sm font-medium">{String(order.orderNumber || "")}</span>
                       <Badge variant="outline" className="text-xs">
-                        {STATUS_LABELS[order.status] || order.status}
+                        {STATUS_LABELS[order.status] || String(order.status || "")}
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {order.customerName} — £{Number(order.total || 0).toFixed(2)}
+                      {String(order.customerName || "")} — £{Number(order.total || 0).toFixed(2)}
                     </p>
                   </div>
                 ))}

@@ -4,6 +4,7 @@ import path from "node:path";
 import { defineConfig } from "vite";
 const plugins = [react({ jsxRuntime: 'automatic' }), tailwindcss()];
 export default defineConfig({
+  mode: 'development',
   plugins,
   resolve: {
     alias: {
