@@ -237,7 +237,7 @@ export default function Kitchen() {
   // Check for pending_acceptance orders and manage alert
   useEffect(() => {
     if (!orders || !authenticated) return;
-    const pendingOrders = orders.filter(o => o.status === "pending_acceptance" && (o.paymentStatus === "authorized" || o.paymentStatus === "paid"));
+    const pendingOrders = orders.filter(o => o.status === "pending_acceptance");
     if (pendingOrders.length > 0 && soundEnabled) {
       startAlert();
     } else {
@@ -504,9 +504,9 @@ export default function Kitchen() {
     setDeliveryTiers(deliveryTiers.filter((_, i) => i !== index));
   };
 
-  const pendingAcceptanceOrders = orders?.filter(o => o.status === "pending_acceptance" && (o.paymentStatus === "authorized" || o.paymentStatus === "paid")) || [];
-  const activeOrders = orders?.filter(o => ["new", "preparing", "ready"].includes(o.status) && (o.paymentStatus === "paid" || o.paymentStatus === "authorized")) || [];
-  const completedOrders = orders?.filter(o => o.status === "delivered" || o.status === "collected") || [];
+  const pendingAcceptanceOrders = orders?.filter(o => o.status === "pending_acceptance") || [];
+  const activeOrders = orders?.filter(o => ["new", "preparing", "ready"].includes(o.status)) || [];
+  const completedOrders = orders?.filter(o => o.status === "delivered" || o.status === "collected" || o.status === "rejected") || [];
 
   return (
     <div className="min-h-screen bg-gray-100">
