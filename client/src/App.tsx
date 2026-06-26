@@ -16,23 +16,24 @@ import Account from "./pages/Account";
 // Error Boundary to prevent blank pages
 class ErrorBoundary extends Component<
   { children: ReactNode; fallback?: ReactNode },
-  { hasError: boolean; error: Error | null }
+  { hasError: boolean; error: Error | null; errorInfo: ErrorInfo | null }
 > {
   constructor(props: { children: ReactNode; fallback?: ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught:", error, errorInfo);
+    this.setState({ errorInfo });
   }
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-lg text-center">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-lg text-center">
             <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">⚠️</span>
             </div>
@@ -40,12 +41,17 @@ class ErrorBoundary extends Component<
             <p className="text-gray-600 text-sm mb-4">
               The page encountered an error. This usually fixes itself with a refresh.
             </p>
-            <p className="text-xs text-gray-400 mb-4 font-mono break-all">
-              {this.state.error?.message || "Unknown error"}
-            </p>
+            <div className="text-left bg-gray-100 rounded-lg p-3 mb-4 max-h-60 overflow-auto">
+              <p className="text-xs font-mono text-red-600 mb-2 break-all">
+                {this.state.error?.message || "Unknown error"}
+              </p>
+              <p className="text-xs font-mono text-gray-500 break-all whitespace-pre-wrap">
+                {this.state.errorInfo?.componentStack || this.state.error?.stack || "No stack trace"}
+              </p>
+            </div>
             <button
               onClick={() => {
-                this.setState({ hasError: false, error: null });
+                this.setState({ hasError: false, error: null, errorInfo: null });
                 window.location.reload();
               }}
               className="bg-[#E31837] hover:bg-[#c01530] text-white font-bold py-3 px-6 rounded-lg"
