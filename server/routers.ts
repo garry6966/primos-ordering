@@ -1,5 +1,4 @@
 import { initTRPC } from "@trpc/server";
-import superjson from "superjson";
 import { z } from "zod";
 import {
   getCategories, getAllMenuItems, getPizzaToppings,
@@ -21,9 +20,7 @@ import { sendOrderNotificationEmail, sendReviewRequestEmail, sendOrderRejectionE
 import { capturePayment, cancelPayment } from "./stripe";
 import { updateOrderPaymentStatus } from "./db";
 
-const t = initTRPC.context<{ req: any; res: any; user: any }>().create({
-  transformer: superjson,
-});
+const t = initTRPC.context<{ req: any; res: any; user: any }>().create({});
 
 const publicProcedure = t.procedure;
 const router = t.router;
