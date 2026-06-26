@@ -451,7 +451,7 @@ export default function Kitchen() {
     if (deliverySettingsData && !deliverySettingsLoaded) {
       setDeliveryMaxRadius(deliverySettingsData.maxRadiusMiles);
       setDeliveryFreeThreshold(deliverySettingsData.freeDeliveryThreshold);
-      setDeliveryTiers(deliverySettingsData.tiers as Array<{ maxMiles: number; fee: number }>);
+      setDeliveryTiers((deliverySettingsData.tiers as Array<{ maxMiles: any; fee: any }>).map(t => ({ maxMiles: Number(t.maxMiles), fee: Number(t.fee) })));
       setDeliverySettingsLoaded(true);
     }
   }, [deliverySettingsData, deliverySettingsLoaded]);
@@ -663,7 +663,7 @@ export default function Kitchen() {
                                 </p>
                               )}
                             </div>
-                            <span className="text-gray-600">£{(item.totalPrice * item.quantity).toFixed(2)}</span>
+                            <span className="text-gray-600">£{(Number(item.totalPrice) * Number(item.quantity)).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -757,7 +757,7 @@ export default function Kitchen() {
                               </p>
                             )}
                           </div>
-                          <span className="text-gray-600">£{(item.totalPrice * item.quantity).toFixed(2)}</span>
+                          <span className="text-gray-600">£{(Number(item.totalPrice) * Number(item.quantity)).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -1191,8 +1191,8 @@ export default function Kitchen() {
                   <div className="space-y-2 mb-3">
                     {deliveryTiers.map((tier, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                        <span className="text-sm font-medium flex-1">Up to <strong>{tier.maxMiles}</strong> miles</span>
-                        <span className="text-sm font-bold text-[#E31837]">£{tier.fee.toFixed(2)}</span>
+                        <span className="text-sm font-medium flex-1">Up to <strong>{Number(tier.maxMiles)}</strong> miles</span>
+                        <span className="text-sm font-bold text-[#E31837]">£{Number(tier.fee).toFixed(2)}</span>
                         <button
                           type="button"
                           onClick={() => handleDeleteTier(idx)}
