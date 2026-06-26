@@ -6,6 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
+/** Safely convert ANY value to a renderable string. Prevents React error #310. */
+function s(value: any): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 const STATUS_FLOW = ["pending_acceptance", "new", "preparing", "ready", "delivered", "collected"] as const;
 type OrderStatus = (typeof STATUS_FLOW)[number] | "rejected";
 
@@ -341,7 +351,7 @@ export default function Kitchen() {
               className="text-center"
               autoFocus
             />
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            {error && <p className="text-red-500 text-sm text-center">{s(error)}</p>}
             <Button
               type="submit"
               className="w-full bg-[#E31837] hover:bg-[#c01530] text-white font-bold py-5"
@@ -644,14 +654,14 @@ export default function Kitchen() {
                       {/* Order Header */}
                       <div className="p-4 border-b border-orange-100 bg-orange-50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono font-bold text-sm">{String(order.orderNumber || "")}</span>
+                          <span className="font-mono font-bold text-sm">{s(order.orderNumber)}</span>
                           <Badge className={`${STATUS_COLORS["pending_acceptance"]} border`}>
                             NEW ORDER
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <Clock className="w-3 h-3" />
-                          <span>{new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>{s(new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }))}</span>
                           <span className="mx-1">|</span>
                           {order.orderType === "delivery" ? (
                             <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> Delivery</span>
@@ -668,10 +678,10 @@ export default function Kitchen() {
                         {orderItems.map((item: any, idx: number) => (
                           <div key={idx} className="flex justify-between text-sm">
                             <div>
-                              <span className="font-medium">{Number(item.quantity)}x {String(item.name)}</span>
+                              <span className="font-medium">{s(item.quantity)}x {s(item.name)}</span>
                               {Array.isArray(item.toppings) && item.toppings.length > 0 && (
                                 <p className="text-xs text-gray-400 ml-4">
-                                  + {item.toppings.map((t: any) => String(t?.name || "")).filter(Boolean).join(", ")}
+                                  + {s(item.toppings.map((t: any) => (typeof t === "string" ? t : t?.name || "")).filter(Boolean).join(", "))}
                                 </p>
                               )}
                               {item.mealDeal && typeof item.mealDeal === "string" && (
@@ -687,10 +697,10 @@ export default function Kitchen() {
 
                       {/* Customer Info */}
                       <div className="px-4 pb-3 text-xs text-gray-500 space-y-0.5">
-                        <p><strong>Name:</strong> {String(order.customerName || "")}</p>
-                        <p><strong>Phone:</strong> {String(order.customerPhone || "")}</p>
-                        {order.deliveryAddress && <p><strong>Address:</strong> {String(order.deliveryAddress)}</p>}
-                        {order.notes && <p><strong>Notes:</strong> {String(order.notes)}</p>}
+                        <p><strong>Name:</strong> {s(order.customerName)}</p>
+                        <p><strong>Phone:</strong> {s(order.customerPhone)}</p>
+                        {order.deliveryAddress && <p><strong>Address:</strong> {s(order.deliveryAddress)}</p>}
+                        {order.notes && <p><strong>Notes:</strong> {s(order.notes)}</p>}
                       </div>
 
                       {/* Total & Accept/Reject Buttons */}
@@ -740,14 +750,14 @@ export default function Kitchen() {
                     {/* Order Header */}
                     <div className="p-4 border-b border-gray-100">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono font-bold text-sm">{String(order.orderNumber || "")}</span>
+                        <span className="font-mono font-bold text-sm">{s(order.orderNumber)}</span>
                         <Badge className={`${STATUS_COLORS[order.status] || ""} border`}>
-                          {STATUS_LABELS[order.status] || String(order.status || "")}
+                          {s(STATUS_LABELS[order.status] || order.status)}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         <Clock className="w-3 h-3" />
-                        <span>{new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span>{s(new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }))}</span>
                         <span className="mx-1">|</span>
                         {order.orderType === "delivery" ? (
                           <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> Delivery</span>
@@ -762,10 +772,10 @@ export default function Kitchen() {
                       {orderItems.map((item: any, idx: number) => (
                         <div key={idx} className="flex justify-between text-sm">
                           <div>
-                            <span className="font-medium">{Number(item.quantity)}x {String(item.name)}</span>
+                            <span className="font-medium">{s(item.quantity)}x {s(item.name)}</span>
                             {Array.isArray(item.toppings) && item.toppings.length > 0 && (
                               <p className="text-xs text-gray-400 ml-4">
-                                + {item.toppings.map((t: any) => String(t?.name || "")).filter(Boolean).join(", ")}
+                                + {s(item.toppings.map((t: any) => (typeof t === "string" ? t : t?.name || "")).filter(Boolean).join(", "))}
                               </p>
                             )}
                             {item.mealDeal && typeof item.mealDeal === "string" && (
@@ -781,10 +791,10 @@ export default function Kitchen() {
 
                     {/* Customer Info */}
                     <div className="px-4 pb-3 text-xs text-gray-500 space-y-0.5">
-                      <p><strong>Name:</strong> {String(order.customerName || "")}</p>
-                      <p><strong>Phone:</strong> {String(order.customerPhone || "")}</p>
-                      {order.deliveryAddress && <p><strong>Address:</strong> {String(order.deliveryAddress)}</p>}
-                      {order.notes && <p><strong>Notes:</strong> {String(order.notes)}</p>}
+                      <p><strong>Name:</strong> {s(order.customerName)}</p>
+                      <p><strong>Phone:</strong> {s(order.customerPhone)}</p>
+                      {order.deliveryAddress && <p><strong>Address:</strong> {s(order.deliveryAddress)}</p>}
+                      {order.notes && <p><strong>Notes:</strong> {s(order.notes)}</p>}
                     </div>
 
                     {/* Total & Action */}
@@ -796,7 +806,7 @@ export default function Kitchen() {
                           onClick={() => handleStatusUpdate(order.id, nextStatus)}
                           className="bg-[#E31837] hover:bg-[#c01530] text-white font-semibold"
                         >
-                          Mark {STATUS_LABELS[nextStatus] || nextStatus}
+                          Mark {s(STATUS_LABELS[nextStatus] || nextStatus)}
                         </Button>
                       )}
                     </div>
@@ -814,13 +824,13 @@ export default function Kitchen() {
                 {completedOrders.slice(-12).reverse().map(order => (
                   <div key={order.id} className="bg-white rounded-lg p-3 opacity-60">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-medium">{String(order.orderNumber || "")}</span>
+                      <span className="font-mono text-sm font-medium">{s(order.orderNumber)}</span>
                       <Badge variant="outline" className="text-xs">
-                        {STATUS_LABELS[order.status] || String(order.status || "")}
+                        {s(STATUS_LABELS[order.status] || order.status)}
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {String(order.customerName || "")} — £{Number(order.total || 0).toFixed(2)}
+                      {s(order.customerName)} — £{Number(order.total || 0).toFixed(2)}
                     </p>
                   </div>
                 ))}
@@ -872,11 +882,11 @@ export default function Kitchen() {
                         <Star key={i} className={`w-4 h-4 ${i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}`} />
                       ))}
                     </div>
-                    <p className="text-sm text-gray-700 mb-2">"{String(review.comment || "")}"</p>
+                    <p className="text-sm text-gray-700 mb-2">"{s(review.comment)}"</p>
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-gray-500">
-                        <span className="font-medium text-gray-700">{String(review.customerName || "")}</span>
-                        {review.orderNumber && <span className="ml-2">Order: {String(review.orderNumber || "")}</span>}
+                        <span className="font-medium text-gray-700">{s(review.customerName)}</span>
+                        {review.orderNumber && <span className="ml-2">Order: {s(review.orderNumber)}</span>}
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -915,18 +925,18 @@ export default function Kitchen() {
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star key={i} className={`w-4 h-4 ${i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}`} />
                       ))}
-                      <span className="ml-2 text-xs text-gray-400">{new Date(typeof review.createdAt === "object" ? String(review.createdAt) : review.createdAt).toLocaleDateString("en-GB")}</span>
+                      <span className="ml-2 text-xs text-gray-400">{s(new Date(typeof review.createdAt === "object" ? String(review.createdAt) : review.createdAt).toLocaleDateString("en-GB"))}</span>
                     </div>
-                    <p className="text-sm text-gray-700 mb-1">"{String(review.comment || "")}"</p>
-                    <p className="text-xs text-gray-500 mb-3">— {String(review.customerName || "")}</p>
+                    <p className="text-sm text-gray-700 mb-1">"{s(review.comment)}"</p>
+                    <p className="text-xs text-gray-500 mb-3">— {s(review.customerName)}</p>
 
                     {/* Existing reply */}
                     {typeof review.reply === "string" && review.reply && (
                       <div className="ml-4 pl-3 border-l-2 border-red-200 bg-red-50 rounded-r-lg p-3 mb-2">
                         <p className="text-xs font-semibold text-[#E31837] mb-1">Primos Restaurant replied:</p>
-                        <p className="text-sm text-gray-700">{String(review.reply)}</p>
+                        <p className="text-sm text-gray-700">{s(review.reply)}</p>
                         {review.repliedAt && typeof review.repliedAt !== "object" && (
-                          <p className="text-xs text-gray-400 mt-1">{new Date(String(review.repliedAt)).toLocaleDateString("en-GB")}</p>
+                          <p className="text-xs text-gray-400 mt-1">{s(new Date(String(review.repliedAt)).toLocaleDateString("en-GB"))}</p>
                         )}
                       </div>
                     )}
@@ -1048,7 +1058,7 @@ export default function Kitchen() {
                   >
                     <option value={0}>Select category...</option>
                     {menuCategories?.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      <option key={cat.id} value={cat.id}>{s(cat.name)}</option>
                     ))}
                   </select>
                   <div className="flex gap-2">
@@ -1065,7 +1075,7 @@ export default function Kitchen() {
               return (
                 <div key={category.id} className="mb-6">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-md text-gray-800">{category.name} ({categoryItems.length})</h3>
+                    <h3 className="font-bold text-md text-gray-800">{s(category.name)} ({categoryItems.length})</h3>
                     <button
                       onClick={() => handleDeleteCategory(category.id)}
                       className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
@@ -1094,13 +1104,13 @@ export default function Kitchen() {
                                   <Input
                                     value={editName}
                                     onChange={e => setEditName(e.target.value)}
-                                    placeholder={item.name}
+                                    placeholder={s(item.name)}
                                     className="text-sm h-8"
                                   />
                                 ) : (
                                   <div>
-                                    <span className="font-medium">{String(item.name)}</span>
-                                    {item.description && <p className="text-xs text-gray-400 truncate max-w-[200px]">{String(item.description)}</p>}
+                                    <span className="font-medium">{s(item.name)}</span>
+                                    {item.description && <p className="text-xs text-gray-400 truncate max-w-[200px]">{s(item.description)}</p>}
                                   </div>
                                 )}
                               </td>
@@ -1109,7 +1119,7 @@ export default function Kitchen() {
                                   <Input
                                     value={editPrice}
                                     onChange={e => setEditPrice(e.target.value)}
-                                    placeholder={item.price}
+                                    placeholder={s(item.price)}
                                     className="text-sm h-8 w-20"
                                   />
                                 ) : (
@@ -1208,7 +1218,7 @@ export default function Kitchen() {
                   <div className="space-y-2 mb-3">
                     {deliveryTiers.map((tier, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                        <span className="text-sm font-medium flex-1">Up to <strong>{Number(tier.maxMiles)}</strong> miles</span>
+                        <span className="text-sm font-medium flex-1">Up to <strong>{s(tier.maxMiles)}</strong> miles</span>
                         <span className="text-sm font-bold text-[#E31837]">£{Number(tier.fee).toFixed(2)}</span>
                         <button
                           type="button"
@@ -1320,8 +1330,8 @@ export default function Kitchen() {
                   <div key={offer.id} className={`bg-white rounded-xl p-4 shadow-sm border-2 ${offer.active ? "border-green-400 bg-green-50" : "border-gray-200"}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-bold text-lg">{String(offer.name || "")}</span>
-                        <span className="ml-3 text-2xl font-black text-[#E31837]">{Number(offer.discountPercent || 0)}% OFF</span>
+                        <span className="font-bold text-lg">{s(offer.name)}</span>
+                        <span className="ml-3 text-2xl font-black text-[#E31837]">{s(offer.discountPercent)}% OFF</span>
                         {offer.active && (
                           <Badge className="ml-3 bg-green-600 text-white">ACTIVE</Badge>
                         )}
