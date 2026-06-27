@@ -11,7 +11,7 @@ const SLIDES = [
   {
     bgClass: "hp-slide-bg-1",
     eyebrow: "Edinburgh's Finest",
-    headlineLines: ["BURGERS.", "PIZZA.", "LOADED FRIES.", "PARMESANS."],
+    headlineLines: ["BURGERS", "PIZZA", "LOADED FRIES", "PARMESANS"],
     headlineRed: [false, true, false, false],
     sub: "",
     ctas: [
@@ -30,7 +30,7 @@ const SLIDES = [
   {
     bgClass: "hp-slide-bg-3",
     eyebrow: "Fresh Pizzas",
-    headlineLines: ["FRESH DOUGH.", "REAL", "INGREDIENTS."],
+    headlineLines: ["FRESH DOUGH", "REAL", "INGREDIENTS"],
     headlineRed: [false, true, false],
     sub: "Hand-stretched pizzas. San Marzano tomatoes. Made fresh on the premises — every single time.",
     ctas: [{ href: "/menu?cat=pizza", label: "View Pizzas", primary: true }],
@@ -38,7 +38,7 @@ const SLIDES = [
   {
     bgClass: "hp-slide-bg-4",
     eyebrow: "Desserts & Shakes",
-    headlineLines: ["FINISH", "SWEET."],
+    headlineLines: ["FINISH", "SWEET"],
     headlineRed: [false, true],
     sub: "Lotus Dream. Black Magic. Bueno Vamos. Waffles. Milkcakes. The kind of desserts you don't share.",
     ctas: [{ href: "/menu?cat=desserts", label: "View Desserts", primary: true }],
