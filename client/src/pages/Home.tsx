@@ -11,9 +11,9 @@ const SLIDES = [
   {
     bgClass: "hp-slide-bg-1",
     eyebrow: "Edinburgh's Finest",
-    headlineLines: ["BURGERS.", "PIZZA.", "LOADED FRIES.", "DELIVERED."],
+    headlineLines: ["BURGERS.", "PIZZA.", "LOADED FRIES.", "PARMESANS."],
     headlineRed: [false, true, false, false],
-    sub: "Made fresh. Never frozen. Delivered to your door or ready for collection — fast.",
+    sub: "",
     ctas: [
       { href: "/menu", label: "Order Now", primary: true },
       { href: "#menu", label: "See the Menu", primary: false },
