@@ -37,7 +37,7 @@ const SLIDES = [
   },
   {
     bgClass: "hp-slide-bg-4",
-    eyebrow: "Desserts & Shakes",
+    eyebrow: "Desserts and Milkshakes",
     headlineLines: ["FINISH", "SWEET"],
     headlineRed: [false, true],
     sub: "Lotus Dream. Black Magic. Bueno Vamos. Waffles. Milkcakes. The kind of desserts you don't share.",
