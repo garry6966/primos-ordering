@@ -2,24 +2,21 @@ import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import {
   getCategories, getAllMenuItems, getPizzaToppings,
-  createOrder, getOrders, updateOrderStatus,
+  getOrders, updateOrderStatus,
   getApprovedReviews, getPendingReviews, createReview, moderateReview,
   replyToReviewDb, getAllApprovedReviews,
-  getLoyaltyByEmail, awardLoyaltyStamp, redeemLoyaltyStamps,
+  getLoyaltyByEmail, awardLoyaltyStamp,
   markLoyaltyStampsAwarded, markReviewEmailSent,
   getOrdersByEmail,
   createMenuItem, updateMenuItem, deleteMenuItem,
   createCategory, deleteCategory,
   getOffers, getActiveOffer, createOffer, toggleOffer, deleteOffer,
   getDeliverySettings, updateDeliverySettings,
-  getNextDailyNumber,
+  updateOrderPaymentStatus,
 } from "./db";
 import OpenAI from "openai";
-import { nanoid } from "nanoid";
-import { notifyNewOrder } from "./index";
-import { sendOrderNotificationEmail, sendReviewRequestEmail, sendOrderRejectionEmail } from "./email";
+import { sendReviewRequestEmail, sendOrderRejectionEmail } from "./email";
 import { capturePayment, cancelPayment } from "./stripe";
-import { updateOrderPaymentStatus } from "./db";
 
 const t = initTRPC.context<{ req: any; res: any; user: any }>().create({});
 
@@ -95,6 +92,9 @@ export const appRouter = router({
   }),
 
   orders: router({
+    // DEPRECATED: Orders are now created exclusively via the Stripe webhook
+    // after payment authorization is confirmed. This mutation is kept as a no-op
+    // to prevent client-side errors if old cached code calls it.
     create: publicProcedure
       .input(z.object({
         customerName: z.string().min(1),
@@ -118,90 +118,10 @@ export const appRouter = router({
         notes: z.string().optional(),
         redeemStamps: z.boolean().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const orderNumber = `PRM-${nanoid(6).toUpperCase()}`;
-        const dailyNumber = await getNextDailyNumber();
-
-        // Handle loyalty redemption
-        let actualTotal = input.total;
-        let loyaltyRedemption = false;
-        if (input.redeemStamps && input.customerEmail) {
-          try {
-            await redeemLoyaltyStamps(input.customerEmail);
-            loyaltyRedemption = true;
-          } catch (e) {
-            console.warn("[Loyalty] Redemption failed:", e);
-          }
-        }
-
-        const order = await createOrder({
-          orderNumber,
-          customerName: input.customerName,
-          customerPhone: input.customerPhone,
-          customerEmail: input.customerEmail || undefined,
-          orderType: input.orderType,
-          deliveryAddress: input.deliveryAddress,
-          deliveryFee: input.deliveryFee.toFixed(2),
-          subtotal: input.subtotal.toFixed(2),
-          total: input.total.toFixed(2),
-          items: input.items,
-          notes: input.notes,
-          loyaltyRedemption,
-          paymentStatus: "paid",
-          dailyNumber,
-        });
-
-        // Award loyalty stamp if actual spend (subtotal minus discounts, excluding delivery) >= £30
-        let stampsAwarded = false;
-        let currentStamps = 0;
-        // Actual spend = total - deliveryFee (total already has discounts applied, we exclude delivery)
-        const spendForStamp = input.total - input.deliveryFee;
-        if (input.customerEmail && spendForStamp >= 30) {
-          try {
-            const loyalty = await awardLoyaltyStamp(input.customerEmail);
-            if (loyalty) {
-              currentStamps = loyalty.stamps;
-              stampsAwarded = true;
-              await markLoyaltyStampsAwarded(order!.id);
-            }
-          } catch (e) {
-            console.warn("[Loyalty] Award failed:", e);
-          }
-        } else if (input.customerEmail) {
-          const loyalty = await getLoyaltyByEmail(input.customerEmail);
-          if (loyalty) currentStamps = loyalty.stamps;
-        }
-
-        // Notify kitchen dashboard via SSE
-        notifyNewOrder(order);
-        // Send email notification to restaurant (fire-and-forget)
-        sendOrderNotificationEmail({
-          orderNumber: order!.orderNumber,
-          customerName: order!.customerName,
-          customerPhone: order!.customerPhone,
-          customerEmail: order!.customerEmail,
-          orderType: order!.orderType as "delivery" | "collection",
-          deliveryAddress: order!.deliveryAddress,
-          items: (order!.items as any[]).map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity,
-            totalPrice: item.totalPrice,
-            toppings: item.toppings,
-            mealDeal: item.mealDeal,
-          })),
-          subtotal: order!.subtotal,
-          deliveryFee: order!.deliveryFee,
-          total: order!.total,
-          notes: order!.notes,
-          createdAt: order!.createdAt,
-        }).catch(err => console.error("[Email] Background send failed:", err));
-
-        return {
-          ...order,
-          stampsAwarded,
-          currentStamps,
-          loyaltyRedemption,
-        };
+      .mutation(async () => {
+        // Orders are created via Stripe webhook (checkout.session.completed)
+        // This endpoint is intentionally a no-op
+        throw new Error("Orders are now created via Stripe payment flow. Use /api/stripe/create-checkout-session instead.");
       }),
 
     list: publicProcedure.query(async () => {

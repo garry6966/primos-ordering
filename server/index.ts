@@ -6,6 +6,7 @@ import fs from "fs";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers";
 import { stripeRouter } from "./stripe";
+import { VAPID_PUBLIC_KEY, addSubscription, removeSubscription } from "./push";
 import mysql from "mysql2/promise";
 
 // Simple event emitter for order updates
@@ -420,6 +421,28 @@ async function startServer() {
 
   // Mount Stripe routes
   app.use("/api/stripe", stripeRouter);
+
+  // Push notification endpoints
+  app.get("/api/push/vapid-public-key", (_req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
+  app.post("/api/push/subscribe", (req, res) => {
+    const subscription = req.body;
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "Invalid subscription" });
+    }
+    addSubscription(subscription);
+    res.json({ success: true });
+  });
+
+  app.post("/api/push/unsubscribe", (req, res) => {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      removeSubscription(endpoint);
+    }
+    res.json({ success: true });
+  });
 
   // SSE endpoint for kitchen real-time updates
   app.get("/api/kitchen/events", (req, res) => {

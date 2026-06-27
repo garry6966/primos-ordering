@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer, Printer } from "lucide-react";
+import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer, Printer, Bell, BellRing } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 /** Format daily number as #001, #002, etc. Falls back to order number if no daily number */
@@ -314,7 +314,83 @@ export default function Kitchen() {
   });
   const updateDeliverySettingsMutation = trpc.delivery.updateSettings.useMutation();
 
-  // === Continuous alert sound for pending orders ===
+  // === Push notification state ===
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [showAlertOverlay, setShowAlertOverlay] = useState(false);
+  const titleFlashRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const originalTitleRef = useRef(document.title);
+
+  // Check push notification support on mount
+  useEffect(() => {
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      setPushSupported(true);
+      // Check if already subscribed
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg) {
+          reg.pushManager.getSubscription().then(sub => {
+            if (sub) setPushEnabled(true);
+          });
+        }
+      });
+    }
+  }, []);
+
+  // Register service worker on mount
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(err => {
+        console.error("SW registration failed:", err);
+      });
+    }
+  }, []);
+
+  const enablePushNotifications = async () => {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        alert("Notification permission denied. Please enable notifications in your browser settings.");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+
+      // Get VAPID public key from server
+      const response = await fetch("/api/push/vapid-public-key");
+      const { publicKey } = await response.json();
+
+      // Convert VAPID key to Uint8Array
+      const urlBase64ToUint8Array = (base64String: string) => {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      };
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      // Send subscription to server
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription),
+      });
+
+      setPushEnabled(true);
+    } catch (err) {
+      console.error("Push subscription failed:", err);
+      alert("Failed to enable notifications. Please try again.");
+    }
+  };
+
+  // === LOUD alert sound for pending orders (kitchen bell pattern) ===
   const playAlertBeep = useCallback(() => {
     if (!soundEnabled) return;
     try {
@@ -325,39 +401,32 @@ export default function Kitchen() {
       if (ctx.state === "suspended") {
         ctx.resume();
       }
-      // Loud double beep
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.frequency.value = 880;
-      osc1.type = "square";
-      gain1.gain.value = 0.5;
-      osc1.start(ctx.currentTime);
-      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-      osc1.stop(ctx.currentTime + 0.15);
 
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.frequency.value = 1100;
-      osc2.type = "square";
-      gain2.gain.value = 0.5;
-      osc2.start(ctx.currentTime + 0.2);
-      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-      osc2.stop(ctx.currentTime + 0.35);
+      // Create a compressor to maximize loudness
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -50;
+      compressor.knee.value = 40;
+      compressor.ratio.value = 12;
+      compressor.attack.value = 0;
+      compressor.release.value = 0.25;
+      compressor.connect(ctx.destination);
 
-      const osc3 = ctx.createOscillator();
-      const gain3 = ctx.createGain();
-      osc3.connect(gain3);
-      gain3.connect(ctx.destination);
-      osc3.frequency.value = 880;
-      osc3.type = "square";
-      gain3.gain.value = 0.5;
-      osc3.start(ctx.currentTime + 0.4);
-      gain3.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.55);
-      osc3.stop(ctx.currentTime + 0.55);
+      // Play 4 rapid loud bell-like tones (kitchen bell pattern)
+      const frequencies = [1200, 1500, 1200, 1500];
+      const startTimes = [0, 0.18, 0.36, 0.54];
+
+      frequencies.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(compressor);
+        osc.frequency.value = freq;
+        osc.type = "square";
+        gain.gain.setValueAtTime(1.0, ctx.currentTime + startTimes[i]);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTimes[i] + 0.15);
+        osc.start(ctx.currentTime + startTimes[i]);
+        osc.stop(ctx.currentTime + startTimes[i] + 0.15);
+      });
     } catch (e) {
       // Audio not available
     }
@@ -368,9 +437,16 @@ export default function Kitchen() {
       clearInterval(alertIntervalRef.current);
       alertIntervalRef.current = null;
     }
+    // Stop title flash
+    if (titleFlashRef.current) {
+      clearInterval(titleFlashRef.current);
+      titleFlashRef.current = null;
+      document.title = originalTitleRef.current;
+    }
+    setShowAlertOverlay(false);
   }, []);
 
-  // Effect to manage alert sound based on order count
+  // Effect to manage alert sound + visual indicators based on pending orders
   useEffect(() => {
     if (!orders || !authenticated) {
       stopAlert();
@@ -380,10 +456,21 @@ export default function Kitchen() {
     const pendingAcceptanceCount = orders.filter(o => o.status === "pending_acceptance").length;
 
     if (pendingAcceptanceCount > 0) {
+      // Start loud repeating alert (every 3 seconds)
       if (!alertIntervalRef.current) {
         playAlertBeep();
-        alertIntervalRef.current = setInterval(playAlertBeep, 2000);
+        alertIntervalRef.current = setInterval(playAlertBeep, 3000);
       }
+      // Flash browser tab title
+      if (!titleFlashRef.current) {
+        let flash = false;
+        titleFlashRef.current = setInterval(() => {
+          flash = !flash;
+          document.title = flash ? `\u26A0\uFE0F NEW ORDER (${pendingAcceptanceCount})` : originalTitleRef.current;
+        }, 800);
+      }
+      // Show pulsing red overlay
+      setShowAlertOverlay(true);
     } else {
       stopAlert();
     }
@@ -672,7 +759,16 @@ export default function Kitchen() {
   const completedOrders = orders?.filter(o => ["delivered", "collected", "rejected"].includes(o.status)).reverse() || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-20 relative">
+      {/* Pulsing red overlay for new orders */}
+      {showAlertOverlay && (
+        <div className="fixed inset-0 z-[100] pointer-events-none">
+          <div className="absolute inset-0 border-[6px] border-red-500 animate-pulse rounded-none" />
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-2 rounded-full font-bold text-sm shadow-lg animate-bounce pointer-events-auto">
+            \u26A0\uFE0F NEW ORDER WAITING
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
         <div className="container px-4 h-16 flex items-center justify-between">
@@ -684,6 +780,16 @@ export default function Kitchen() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
+            {/* Push Notification Toggle */}
+            {pushSupported && (
+              <button
+                onClick={enablePushNotifications}
+                className={`p-2 rounded-full transition-colors ${pushEnabled ? "text-green-600 bg-green-50" : "text-orange-600 bg-orange-50 animate-pulse"}`}
+                title={pushEnabled ? "Push notifications enabled" : "Enable push notifications (works when screen is off)"}
+              >
+                {pushEnabled ? <BellRing className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
+              </button>
+            )}
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
               className={`p-2 rounded-full transition-colors ${soundEnabled ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-100"}`}

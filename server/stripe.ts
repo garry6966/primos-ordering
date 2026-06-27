@@ -12,6 +12,7 @@ import { orders } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { notifyNewOrder } from "./index";
 import { sendOrderNotificationEmail } from "./email";
+import { sendPushNotification } from "./push";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
@@ -121,6 +122,7 @@ async function calculateDeliveryFeeServer(address: string): Promise<{ fee: numbe
 }
 
 // --- Create Checkout Session ---
+// NOTE: Order is NOT created here. It's created in the webhook after payment is authorized.
 stripeRouter.post("/create-checkout-session", async (req: Request, res: Response) => {
   try {
     const {
@@ -211,9 +213,23 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
       discounts = [{ coupon: coupon.id }];
     }
 
-    // Generate order number ahead of time
+    // Generate order number ahead of time so we can use it in the success URL
     const orderNumber = `PRM-${nanoid(6).toUpperCase()}`;
-    const dailyNumber = await getNextDailyNumber();
+
+    // Stripe metadata has a 500 char limit per value. Items can be large,
+    // so we split them across multiple metadata keys if needed.
+    const itemsJson = JSON.stringify(items);
+    const itemsChunks: Record<string, string> = {};
+    const CHUNK_SIZE = 490; // Leave some margin
+    if (itemsJson.length <= CHUNK_SIZE) {
+      itemsChunks["items"] = itemsJson;
+    } else {
+      const numChunks = Math.ceil(itemsJson.length / CHUNK_SIZE);
+      for (let i = 0; i < numChunks; i++) {
+        itemsChunks[`items_${i}`] = itemsJson.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      }
+      itemsChunks["items_chunks"] = String(numChunks);
+    }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
@@ -235,9 +251,11 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
         deliveryFee: String(validatedDeliveryFee),
         subtotal: String(subtotal),
         total: String(finalTotal),
-        items: JSON.stringify(items),
         notes: notes || "",
         redeemStamps: redeemStamps ? "true" : "false",
+        discountPercent: String(discountPercent || 0),
+        discountAmount: String(discountAmount || 0),
+        ...itemsChunks,
       },
     };
 
@@ -247,26 +265,8 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 
-    // Create the order in the database with pending payment status
-    await createOrder({
-      orderNumber,
-      customerName,
-      customerPhone,
-      customerEmail: customerEmail || undefined,
-      orderType,
-      deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,
-      deliveryFee: validatedDeliveryFee.toFixed(2),
-      subtotal: subtotal.toFixed(2),
-      total: finalTotal.toFixed(2),
-      items,
-      notes: notes || undefined,
-      loyaltyRedemption: redeemStamps || false,
-      stripeSessionId: session.id,
-      paymentStatus: "pending",
-      discountPercent: discountPercent || 0,
-      discountAmount: discountAmount ? discountAmount.toFixed(2) : "0.00",
-      dailyNumber,
-    });
+    // DO NOT create the order here. The order is created in the webhook
+    // after Stripe confirms the payment authorization was successful.
 
     res.json({ url: session.url, orderNumber });
   } catch (error: any) {
@@ -309,20 +309,56 @@ stripeRouter.post(
             break;
           }
 
-          // Update order payment status to "authorized" (not captured yet)
-          await db.update(orders).set({
-            paymentStatus: "authorized",
-            stripePaymentIntentId: session.payment_intent as string,
-          }).where(eq(orders.stripeSessionId, session.id));
+          const metadata = session.metadata || {};
 
-          // Get the updated order
-          const [order] = await db.select().from(orders)
-            .where(eq(orders.stripeSessionId, session.id))
-            .limit(1);
+          // Reconstruct items from metadata (may be chunked)
+          let items: any[];
+          if (metadata.items) {
+            items = JSON.parse(metadata.items);
+          } else if (metadata.items_chunks) {
+            const numChunks = parseInt(metadata.items_chunks);
+            let combined = "";
+            for (let i = 0; i < numChunks; i++) {
+              combined += metadata[`items_${i}`] || "";
+            }
+            items = JSON.parse(combined);
+          } else {
+            console.error("[Stripe Webhook] No items found in metadata");
+            items = [];
+          }
+
+          // Get the daily number now (at the moment the order is actually confirmed)
+          const dailyNumber = await getNextDailyNumber();
+
+          // Create the order in the database NOW (after payment is authorized)
+          const order = await createOrder({
+            orderNumber: metadata.orderNumber || `PRM-${nanoid(6).toUpperCase()}`,
+            customerName: metadata.customerName || "Unknown",
+            customerPhone: metadata.customerPhone || "",
+            customerEmail: metadata.customerEmail || undefined,
+            orderType: (metadata.orderType as "delivery" | "collection") || "collection",
+            deliveryAddress: metadata.deliveryAddress || undefined,
+            deliveryFee: parseFloat(metadata.deliveryFee || "0").toFixed(2),
+            subtotal: parseFloat(metadata.subtotal || "0").toFixed(2),
+            total: parseFloat(metadata.total || "0").toFixed(2),
+            items,
+            notes: metadata.notes || undefined,
+            loyaltyRedemption: metadata.redeemStamps === "true",
+            stripeSessionId: session.id,
+            paymentStatus: "authorized",
+            discountPercent: parseInt(metadata.discountPercent || "0"),
+            discountAmount: parseFloat(metadata.discountAmount || "0").toFixed(2),
+            dailyNumber,
+          });
 
           if (order) {
+            // Update with the payment intent ID
+            await db.update(orders).set({
+              stripePaymentIntentId: session.payment_intent as string,
+            }).where(eq(orders.id, order.id));
+
             // Handle loyalty redemption (deduct stamps immediately since customer committed)
-            if (session.metadata?.redeemStamps === "true" && order.customerEmail) {
+            if (metadata.redeemStamps === "true" && order.customerEmail) {
               try {
                 await redeemLoyaltyStamps(order.customerEmail);
               } catch (e) {
@@ -335,7 +371,15 @@ stripeRouter.post(
             // Notify kitchen dashboard via SSE
             notifyNewOrder(order);
 
+            // Send push notification to kitchen devices
+            sendPushNotification({
+              title: `🍕 New Order #${String(dailyNumber).padStart(3, "0")}`,
+              body: `${order.customerName} — ${order.orderType === "delivery" ? "Delivery" : "Collection"} — £${parseFloat(order.total).toFixed(2)}`,
+              orderNumber: order.orderNumber,
+            }).catch(err => console.error("[Push] Notification failed:", err));
+
             // Send email notification to restaurant
+            console.log(`[Email] Attempting to send order notification for ${order.orderNumber}...`);
             sendOrderNotificationEmail({
               orderNumber: order.orderNumber,
               customerName: order.customerName,
@@ -355,7 +399,9 @@ stripeRouter.post(
               total: order.total,
               notes: order.notes,
               createdAt: order.createdAt,
-            }).catch(err => console.error("[Stripe Webhook] Email send failed:", err));
+            }).then(sent => {
+              console.log(`[Email] Order notification for ${order.orderNumber}: ${sent ? "SENT" : "FAILED/SKIPPED"}`);
+            }).catch(err => console.error("[Email] Order notification error:", err));
           }
         } catch (error) {
           console.error("[Stripe Webhook] Error processing payment:", error);
@@ -366,17 +412,7 @@ stripeRouter.post(
       case "checkout.session.expired": {
         const session = event.data.object as Stripe.Checkout.Session;
         console.log(`[Stripe Webhook] Session expired: ${session.id}`);
-
-        try {
-          const db = await getDb();
-          if (db) {
-            await db.update(orders).set({
-              paymentStatus: "failed",
-            }).where(eq(orders.stripeSessionId, session.id));
-          }
-        } catch (error) {
-          console.error("[Stripe Webhook] Error handling expired session:", error);
-        }
+        // No order was created (since we only create on successful auth), so nothing to update
         break;
       }
 

@@ -6,8 +6,11 @@ const FROM_ADDRESS = "Primo's Orders <orders@orderprimosfood.com>";
 function getResend() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[Email] RESEND_API_KEY not set — order notification emails will not be sent.");
+    console.warn("[Email] RESEND_API_KEY not set — emails will not be sent. Set this env var on Railway.");
     return null;
+  }
+  if (!apiKey.startsWith("re_")) {
+    console.warn("[Email] RESEND_API_KEY doesn't start with 're_' — may be invalid.");
   }
   return new Resend(apiKey);
 }
@@ -265,13 +268,21 @@ Primo's · 6 Groathill Road North, Edinburgh EH4 2SW · 0131 563 4457
 }
 
 export async function sendOrderNotificationEmail(order: OrderEmailData): Promise<boolean> {
+  console.log(`[Email] sendOrderNotificationEmail called for ${order.orderNumber}`);
+  console.log(`[Email] RESEND_API_KEY present: ${!!process.env.RESEND_API_KEY}, starts with re_: ${process.env.RESEND_API_KEY?.startsWith("re_")}`);
+  console.log(`[Email] Sending to: ${NOTIFY_EMAIL}, from: ${FROM_ADDRESS}`);
+
   const resend = getResend();
-  if (!resend) return false;
+  if (!resend) {
+    console.error(`[Email] Cannot send — Resend client not initialized (missing API key)`);
+    return false;
+  }
 
   try {
     const subject = `🍕 New ${order.orderType === "delivery" ? "Delivery" : "Collection"} Order — ${order.orderNumber} — £${parseFloat(order.total).toFixed(2)}`;
 
-    const { error } = await resend.emails.send({
+    console.log(`[Email] Calling resend.emails.send() with subject: ${subject}`);
+    const { data, error } = await resend.emails.send({
       from: FROM_ADDRESS,
       to: NOTIFY_EMAIL,
       subject,
@@ -280,14 +291,14 @@ export async function sendOrderNotificationEmail(order: OrderEmailData): Promise
     });
 
     if (error) {
-      console.error("[Email] Resend returned error:", error);
+      console.error("[Email] Resend API returned error:", JSON.stringify(error));
       return false;
     }
 
-    console.log(`[Email] Order notification sent for ${order.orderNumber}`);
+    console.log(`[Email] Order notification SENT successfully for ${order.orderNumber}. ID: ${data?.id || "unknown"}`);
     return true;
-  } catch (err) {
-    console.error("[Email] Failed to send order notification:", err);
+  } catch (err: any) {
+    console.error("[Email] Exception during send:", err.message, err.stack);
     return false;
   }
 }
@@ -365,12 +376,8 @@ function buildReviewRequestHtml(data: ReviewRequestEmailData): string {
         <!-- CTA -->
         <tr>
           <td style="padding:16px 28px 24px;text-align:center;">
-            <div style="font-size:14px;color:#555;margin-bottom:16px;">
-              Would you take a moment to share your experience? It helps us improve and helps other customers too.
-            </div>
-            <a href="${reviewLink}" style="display:inline-block;background:#E31837;color:#ffffff;font-size:16px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none;">
-              Leave a Review &#x2B50;
-            </a>
+            <a href="${reviewLink}" style="display:inline-block;background:#E31837;color:#ffffff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">Leave a Review &#x2B50;</a>
+            <div style="font-size:12px;color:#999;margin-top:12px;">It only takes 30 seconds and helps us improve!</div>
           </td>
         </tr>
 
@@ -379,7 +386,6 @@ function buildReviewRequestHtml(data: ReviewRequestEmailData): string {
           <td style="padding:20px 28px;text-align:center;border-top:1px solid #f0f0f0;">
             <div style="font-size:12px;color:#aaa;">6 Groathill Road North, Edinburgh EH4 2SW</div>
             <div style="font-size:12px;color:#aaa;margin-top:2px;">0131 563 4457 &middot; orderprimos@gmail.com</div>
-            <div style="font-size:11px;color:#ccc;margin-top:8px;">Sent automatically by the Primo&apos;s ordering system.</div>
           </td>
         </tr>
 
@@ -393,7 +399,6 @@ function buildReviewRequestHtml(data: ReviewRequestEmailData): string {
 function buildReviewRequestPlainText(data: ReviewRequestEmailData): string {
   const siteUrl = process.env.SITE_URL || "https://orderprimosfood.com";
   const reviewLink = `${siteUrl}/reviews?order=${encodeURIComponent(data.orderNumber)}`;
-
   const itemsList = data.items.map(item => `  ${item.quantity}x ${item.name}`).join("\n");
 
   return `Hi ${data.customerName}!
@@ -475,11 +480,16 @@ function buildRejectionPlainText(data: OrderRejectionEmailData): string {
 }
 
 export async function sendOrderRejectionEmail(data: OrderRejectionEmailData): Promise<boolean> {
+  console.log(`[Email] sendOrderRejectionEmail called for ${data.orderNumber} to ${data.customerEmail}`);
+
   const resend = getResend();
-  if (!resend) return false;
+  if (!resend) {
+    console.error(`[Email] Cannot send rejection email — Resend client not initialized`);
+    return false;
+  }
 
   try {
-    const { error } = await resend.emails.send({
+    const { data: responseData, error } = await resend.emails.send({
       from: FROM_ADDRESS,
       to: data.customerEmail,
       subject: `Order Update \u2014 ${data.orderNumber}`,
@@ -488,9 +498,11 @@ export async function sendOrderRejectionEmail(data: OrderRejectionEmailData): Pr
     });
 
     if (error) {
-      console.error("[Email] Rejection email send error:", error);
+      console.error("[Email] Rejection email Resend API error:", JSON.stringify(error));
       return false;
     }
+
+    console.log(`[Email] Rejection email SENT for ${data.orderNumber} to ${data.customerEmail}. ID: ${responseData?.id || "unknown"}`);
 
     // Also notify the owner
     await resend.emails.send({
@@ -500,20 +512,24 @@ export async function sendOrderRejectionEmail(data: OrderRejectionEmailData): Pr
       text: `Order ${data.orderNumber} for ${data.customerName} has been rejected. Payment hold released.`,
     });
 
-    console.log(`[Email] Rejection email sent for ${data.orderNumber} to ${data.customerEmail}`);
     return true;
-  } catch (err) {
-    console.error("[Email] Failed to send rejection email:", err);
+  } catch (err: any) {
+    console.error("[Email] Rejection email exception:", err.message, err.stack);
     return false;
   }
 }
 
 export async function sendReviewRequestEmail(data: ReviewRequestEmailData): Promise<boolean> {
+  console.log(`[Email] sendReviewRequestEmail called for ${data.orderNumber} to ${data.customerEmail}`);
+
   const resend = getResend();
-  if (!resend) return false;
+  if (!resend) {
+    console.error(`[Email] Cannot send review request — Resend client not initialized`);
+    return false;
+  }
 
   try {
-    const { error } = await resend.emails.send({
+    const { data: responseData, error } = await resend.emails.send({
       from: FROM_ADDRESS,
       to: data.customerEmail,
       subject: `How was your order? Leave us a review! ⭐ — ${data.orderNumber}`,
@@ -522,14 +538,14 @@ export async function sendReviewRequestEmail(data: ReviewRequestEmailData): Prom
     });
 
     if (error) {
-      console.error("[Email] Review request send error:", error);
+      console.error("[Email] Review request Resend API error:", JSON.stringify(error));
       return false;
     }
 
-    console.log(`[Email] Review request sent to ${data.customerEmail} for ${data.orderNumber}`);
+    console.log(`[Email] Review request SENT to ${data.customerEmail} for ${data.orderNumber}. ID: ${responseData?.id || "unknown"}`);
     return true;
-  } catch (err) {
-    console.error("[Email] Failed to send review request:", err);
+  } catch (err: any) {
+    console.error("[Email] Review request exception:", err.message, err.stack);
     return false;
   }
 }

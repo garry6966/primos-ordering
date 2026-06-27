@@ -19,7 +19,7 @@ export default function Confirmation() {
 
   // Fetch the order details (refetch periodically in case webhook hasn't fired yet)
   const { data: orders } = trpc.orders.list.useQuery(undefined, {
-    refetchInterval: 3000, // Poll every 3 seconds until payment confirmed
+    refetchInterval: 3000, // Poll every 3 seconds until order appears
   });
   const order = orders?.find(o => o.orderNumber === params.orderNumber);
 
@@ -33,15 +33,36 @@ export default function Confirmation() {
   const isWaitingForAcceptance = orderStatus === "pending_acceptance" && (paymentStatus === "authorized" || paymentStatus === "pending");
   const isConfirmed = ["new", "preparing", "ready", "delivered", "collected"].includes(orderStatus || "") && paymentStatus === "paid";
   const isRejected = orderStatus === "rejected" && paymentStatus === "cancelled";
-  const isPending = paymentStatus === "pending" && orderStatus === "pending_acceptance";
+  // Order not yet in DB (webhook hasn't fired yet)
+  const isWaitingForWebhook = !order;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
       <div className="container py-8 max-w-lg">
+        {/* === WAITING FOR WEBHOOK (order not in DB yet) === */}
+        {isWaitingForWebhook && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+            </div>
+
+            <h1 className="text-2xl font-bold mb-2">Processing Payment...</h1>
+            <p className="text-gray-600 mb-1">Please wait while we confirm your payment</p>
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {params.orderNumber}
+            </p>
+
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-amber-600 text-sm font-medium">
+              <Clock className="w-4 h-4" />
+              This usually takes a few seconds...
+            </div>
+          </div>
+        )}
+
         {/* === WAITING FOR RESTAURANT ACCEPTANCE === */}
-        {isWaitingForAcceptance && !isPending && (
+        {order && isWaitingForAcceptance && (
           <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
             <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
@@ -111,28 +132,8 @@ export default function Confirmation() {
           </div>
         )}
 
-        {/* === STILL PROCESSING (payment pending, webhook not fired yet) === */}
-        {isPending && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
-            </div>
-
-            <h1 className="text-2xl font-bold mb-2">Processing Payment...</h1>
-            <p className="text-gray-600 mb-1">Please wait while we confirm your payment</p>
-            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
-              {displayNumber}
-            </p>
-
-            <div className="mt-3 flex items-center justify-center gap-1.5 text-amber-600 text-sm font-medium">
-              <Clock className="w-4 h-4" />
-              Payment processing...
-            </div>
-          </div>
-        )}
-
         {/* === FALLBACK: old orders with paymentStatus "paid" still pending === */}
-        {order && !isWaitingForAcceptance && !isConfirmed && !isRejected && !isPending && (
+        {order && !isWaitingForAcceptance && !isConfirmed && !isRejected && (
           <div className="bg-white rounded-2xl p-6 shadow-sm text-center mb-4">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -240,7 +241,7 @@ export default function Confirmation() {
         )}
 
         {/* Info Cards — hide if rejected */}
-        {!isRejected && (
+        {!isRejected && order && (
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4 mt-4">
             <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
               <Clock className="w-5 h-5 text-[#E31837] mt-0.5" />
