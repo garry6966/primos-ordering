@@ -192,6 +192,7 @@ export default function Home() {
         .hp-slide-counter{position:absolute;top:50%;right:5vw;transform:translateY(-50%);z-index:10;font-family:var(--hp-fd);font-weight:900;font-style:italic;color:rgba(255,255,255,0.15);font-size:8rem;line-height:1;pointer-events:none;user-select:none;}
         /* MARQUEE */
         .hp-marquee-strip{background:var(--hp-red);overflow:hidden;white-space:nowrap;padding:0.6rem 0;border-top:3px solid var(--hp-red-dark);border-bottom:3px solid var(--hp-red-dark);}
+        .hp-top-ticker{position:fixed;top:64px;left:0;right:0;z-index:999;background:var(--hp-red);overflow:hidden;white-space:nowrap;padding:0.6rem 0;border-bottom:3px solid var(--hp-red-dark);}
         .hp-marquee-track{display:inline-flex;animation:hp-marquee 22s linear infinite;}
         .hp-marquee-track span{font-family:var(--hp-fd);font-weight:900;font-style:italic;font-size:0.95rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--hp-white);padding:0 2rem;}
         .hp-marquee-track .hp-dot{color:rgba(255,255,255,0.5);padding:0 0.5rem;font-style:normal;}
@@ -277,7 +278,7 @@ export default function Home() {
         .hp-reveal-d1{transition-delay:0.1s;}.hp-reveal-d2{transition-delay:0.2s;}.hp-reveal-d3{transition-delay:0.3s;}
         /* MOBILE */
         @media(max-width:768px){
-          .hp-nav-links{display:none;}.hp-hamburger{display:flex;}.hp-nav{height:56px;}
+          .hp-nav-links{display:none;}.hp-hamburger{display:flex;}.hp-nav{height:56px;}.hp-top-ticker{top:56px;}
           .hp-nav-links.hp-open{display:flex;flex-direction:column;position:fixed;top:56px;left:0;right:0;background:var(--hp-black);padding:1.5rem 5vw 2rem;border-top:1px solid rgba(232,0,13,0.3);z-index:999;gap:1.25rem;}
           .hp-slide{padding:0 6vw;padding-bottom:6rem;}.hp-slide-counter{display:none;}.hp-slider-arrows{right:6vw;}
           .hp-categories-grid{grid-template-columns:repeat(2,1fr);}
@@ -310,6 +311,16 @@ export default function Home() {
             <span /><span /><span />
           </button>
         </nav>
+
+        {/* TOP TICKER */}
+        <div className="hp-top-ticker" aria-hidden="true">
+          <div className="hp-marquee-track">
+            {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].flatMap((item, i) => [
+              <span key={`top-item-${i}`}>{item}</span>,
+              <span key={`top-dot-${i}`} className="hp-dot">★</span>,
+            ])}
+          </div>
+        </div>
 
         {/* HERO SLIDER */}
         <section
