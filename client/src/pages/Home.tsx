@@ -46,9 +46,9 @@ const SLIDES = [
 ];
 
 const CATEGORIES = [
-  { slug: "beef-burgers", label: "Burgers", bgClass: "hp-cat-bg-burgers" },
-  { slug: "pizza", label: "Pizza", bgClass: "hp-cat-bg-pizza" },
   { slug: "parmesans", label: "Parmesans", bgClass: "hp-cat-bg-parmesans" },
+  { slug: "pizza", label: "Pizza", bgClass: "hp-cat-bg-pizza" },
+  { slug: "beef-burgers", label: "Burgers", bgClass: "hp-cat-bg-burgers" },
   { slug: "kebabs", label: "Kebabs", bgClass: "hp-cat-bg-kebabs" },
   { slug: "loaded-fries", label: "Loaded Fries", bgClass: "hp-cat-bg-fries" },
   { slug: "wraps", label: "Wraps", bgClass: "hp-cat-bg-wraps" },
