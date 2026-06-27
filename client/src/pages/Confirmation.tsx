@@ -5,6 +5,14 @@ import { useLocation } from "wouter";
 import { CheckCircle, Clock, MapPin, Phone, Truck, Store, Stamp, CreditCard, XCircle, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
 
+/** Format daily number as #001, #002, etc. Falls back to order number if no daily number */
+function formatDailyNumber(order: any): string {
+  if (order.dailyNumber != null) {
+    return `#${String(order.dailyNumber).padStart(3, "0")}`;
+  }
+  return order.orderNumber;
+}
+
 export default function Confirmation() {
   const params = useParams<{ orderNumber: string }>();
   const [, navigate] = useLocation();
@@ -16,6 +24,7 @@ export default function Confirmation() {
   const order = orders?.find(o => o.orderNumber === params.orderNumber);
 
   const orderItems = order ? (order.items as any[]) : [];
+  const displayNumber = order ? formatDailyNumber(order) : params.orderNumber;
 
   // Determine the display state
   const paymentStatus = order ? (order as any).paymentStatus : null;
@@ -40,8 +49,8 @@ export default function Confirmation() {
 
             <h1 className="text-2xl font-bold mb-2">Order Placed!</h1>
             <p className="text-gray-600 mb-1">Waiting for restaurant to confirm...</p>
-            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-              {params.orderNumber}
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {displayNumber}
             </p>
 
             <div className="mt-4 flex items-center justify-center gap-1.5 text-orange-600 text-sm font-medium">
@@ -68,8 +77,8 @@ export default function Confirmation() {
 
             <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
             <p className="text-gray-600 mb-1">Thank you for your order</p>
-            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-              {params.orderNumber}
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {displayNumber}
             </p>
 
             <div className="mt-3 flex items-center justify-center gap-1.5 text-green-600 text-sm font-medium">
@@ -88,8 +97,8 @@ export default function Confirmation() {
 
             <h1 className="text-2xl font-bold mb-2 text-red-700">Order Not Accepted</h1>
             <p className="text-gray-600 mb-1">Sorry, we're unable to accept your order at this moment.</p>
-            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-              {params.orderNumber}
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {displayNumber}
             </p>
 
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
@@ -111,8 +120,8 @@ export default function Confirmation() {
 
             <h1 className="text-2xl font-bold mb-2">Processing Payment...</h1>
             <p className="text-gray-600 mb-1">Please wait while we confirm your payment</p>
-            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-              {params.orderNumber}
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {displayNumber}
             </p>
 
             <div className="mt-3 flex items-center justify-center gap-1.5 text-amber-600 text-sm font-medium">
@@ -131,8 +140,8 @@ export default function Confirmation() {
 
             <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
             <p className="text-gray-600 mb-1">Thank you for your order</p>
-            <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-md font-bold">
-              {params.orderNumber}
+            <p className="text-2xl font-mono bg-gray-100 inline-block px-4 py-2 rounded-md font-bold text-[#E31837]">
+              {displayNumber}
             </p>
 
             {paymentStatus === "paid" && (

@@ -1,4 +1,4 @@
-import { eq, asc, desc, and, sql, lt } from "drizzle-orm";
+import { eq, asc, desc, and, sql, lt, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, menuCategories, menuItems, pizzaToppings, orders, reviews, loyaltyAccounts, offers, deliverySettings } from "../drizzle/schema";
 
@@ -177,6 +177,30 @@ export async function deleteCategory(id: number) {
 }
 
 // ========== Order queries ==========
+
+/** Get the next daily order number (resets at midnight UK time) */
+export async function getNextDailyNumber(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 1;
+
+  // Get current date boundaries in UK timezone
+  // UK is Europe/London: UTC+0 in winter, UTC+1 in summer (BST)
+  const now = new Date();
+  // Format the date in UK timezone to get today's date string
+  const ukDateStr = now.toLocaleDateString("en-CA", { timeZone: "Europe/London" }); // YYYY-MM-DD
+  // Create start/end of day in UK timezone
+  // Parse the UK date and find UTC boundaries
+  const [year, month, day] = ukDateStr.split("-").map(Number);
+  // Create a date object for start of UK day, then convert to UTC
+  // We'll use SQL to compare dates in a timezone-aware way
+  const result = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(orders)
+    .where(sql`DATE(CONVERT_TZ(${orders.createdAt}, '+00:00', 'Europe/London')) = ${ukDateStr}`);
+
+  const count = Number(result[0]?.count || 0);
+  return count + 1;
+}
+
 export async function createOrder(data: {
   orderNumber: string;
   customerName: string;
@@ -194,9 +218,14 @@ export async function createOrder(data: {
   paymentStatus?: "pending" | "paid" | "failed" | "authorized" | "cancelled";
   discountPercent?: number;
   discountAmount?: string;
+  dailyNumber?: number;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // Get the daily number if not provided
+  const dailyNumber = data.dailyNumber || await getNextDailyNumber();
+
   await db.insert(orders).values({
     orderNumber: data.orderNumber,
     customerName: data.customerName,
@@ -215,6 +244,7 @@ export async function createOrder(data: {
     status: "pending_acceptance",
     discountPercent: data.discountPercent || 0,
     discountAmount: data.discountAmount || "0.00",
+    dailyNumber,
   });
   const result = await db.select().from(orders).where(eq(orders.orderNumber, data.orderNumber)).limit(1);
   return result[0];

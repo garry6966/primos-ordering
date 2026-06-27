@@ -91,6 +91,7 @@ async function runMigrations() {
       { name: 'paymentStatus', def: "VARCHAR(20) NOT NULL DEFAULT 'pending'" },
       { name: 'discountPercent', def: 'INT DEFAULT 0' },
       { name: 'discountAmount', def: "DECIMAL(8,2) DEFAULT '0.00'" },
+      { name: 'dailyNumber', def: 'INT DEFAULT NULL' },
     ];
     for (const col of orderCols) {
       try {

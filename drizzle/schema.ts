@@ -60,6 +60,7 @@ export const orders = mysqlTable("orders", {
   stripeSessionId: varchar("stripeSessionId", { length: 255 }),
   stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
   paymentStatus: varchar("paymentStatus", { length: 20 }).default("pending").notNull(),
+  dailyNumber: int("dailyNumber"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

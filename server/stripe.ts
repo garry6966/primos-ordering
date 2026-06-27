@@ -6,6 +6,7 @@ import {
   awardLoyaltyStamp, redeemLoyaltyStamps,
   getLoyaltyByEmail, markLoyaltyStampsAwarded,
   getDeliverySettings,
+  getNextDailyNumber,
 } from "./db";
 import { orders } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -212,6 +213,7 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
 
     // Generate order number ahead of time
     const orderNumber = `PRM-${nanoid(6).toUpperCase()}`;
+    const dailyNumber = await getNextDailyNumber();
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
@@ -263,6 +265,7 @@ stripeRouter.post("/create-checkout-session", async (req: Request, res: Response
       paymentStatus: "pending",
       discountPercent: discountPercent || 0,
       discountAmount: discountAmount ? discountAmount.toFixed(2) : "0.00",
+      dailyNumber,
     });
 
     res.json({ url: session.url, orderNumber });

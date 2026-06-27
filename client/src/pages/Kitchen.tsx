@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer } from "lucide-react";
+import { Lock, ChefHat, Clock, Truck, Store, Volume2, VolumeX, Star, Check, X, Plus, Trash2, Edit2, Tag, UtensilsCrossed, MessageSquare, Sparkles, Send, Timer, Printer } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 /** Safely convert ANY value to a renderable string. Prevents React error #310. */
@@ -14,6 +14,150 @@ function s(value: any): string {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+/** Format daily number as #001, #002, etc. Falls back to order number if no daily number */
+function formatDailyNumber(order: any): string {
+  if (order.dailyNumber != null) {
+    return `#${String(order.dailyNumber).padStart(3, "0")}`;
+  }
+  return order.orderNumber;
+}
+
+/** Print a receipt for an order using a hidden iframe */
+function printReceipt(order: any) {
+  const orderItems = Array.isArray(order.items) ? (order.items as any[]) : [];
+  const dailyNum = formatDailyNumber(order);
+  const orderTime = new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt)
+    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const orderDate = new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt)
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Order ${dailyNum}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Courier New', monospace;
+          width: 80mm;
+          padding: 4mm;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .order-number {
+          text-align: center;
+          font-size: 32px;
+          font-weight: bold;
+          padding: 8px 0;
+          border-bottom: 2px dashed #000;
+          margin-bottom: 8px;
+        }
+        .order-type {
+          text-align: center;
+          font-size: 16px;
+          font-weight: bold;
+          text-transform: uppercase;
+          padding: 4px 0;
+          margin-bottom: 8px;
+        }
+        .section {
+          border-bottom: 1px dashed #000;
+          padding: 6px 0;
+          margin-bottom: 6px;
+        }
+        .item-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 2px 0;
+        }
+        .item-name { font-weight: bold; }
+        .item-extras { padding-left: 12px; font-size: 11px; color: #333; }
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 16px;
+          font-weight: bold;
+          padding: 8px 0;
+          border-top: 2px dashed #000;
+          margin-top: 8px;
+        }
+        .info-label { font-weight: bold; }
+        .notes {
+          background: #f0f0f0;
+          padding: 6px;
+          margin-top: 6px;
+          border: 1px solid #ccc;
+          font-weight: bold;
+        }
+        .time-info { text-align: center; font-size: 11px; color: #555; margin-top: 8px; }
+        @media print {
+          body { width: 80mm; }
+          @page { size: 80mm auto; margin: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="order-number">${dailyNum}</div>
+      <div class="order-type">${order.orderType === "delivery" ? "🚗 DELIVERY" : "🏪 COLLECTION"}</div>
+
+      <div class="section">
+        <div><span class="info-label">Customer:</span> ${s(order.customerName)}</div>
+        <div><span class="info-label">Phone:</span> ${s(order.customerPhone)}</div>
+        ${order.deliveryAddress ? `<div><span class="info-label">Address:</span> ${s(order.deliveryAddress)}</div>` : ""}
+      </div>
+
+      <div class="section">
+        ${orderItems.map((item: any) => `
+          <div class="item-row">
+            <span class="item-name">${s(item.quantity)}x ${s(item.name)}</span>
+            <span>£${(Number(item.totalPrice || 0) * Number(item.quantity || 1)).toFixed(2)}</span>
+          </div>
+          ${Array.isArray(item.toppings) && item.toppings.length > 0 ? `<div class="item-extras">+ ${item.toppings.map((t: any) => typeof t === "string" ? t : t?.name || "").filter(Boolean).join(", ")}</div>` : ""}
+          ${item.mealDeal && typeof item.mealDeal === "string" ? `<div class="item-extras">${item.mealDeal === "chips_drink" ? "Meal Deal (Chips + Drink)" : "Meal Deal (Chips + Shake)"}</div>` : ""}
+        `).join("")}
+      </div>
+
+      ${order.notes ? `<div class="notes">⚠️ NOTES: ${s(order.notes)}</div>` : ""}
+
+      <div class="total-row">
+        <span>TOTAL</span>
+        <span>£${Number(order.total || 0).toFixed(2)}</span>
+      </div>
+
+      <div class="time-info">
+        Ordered: ${orderTime} — ${orderDate}
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Use a hidden iframe to print
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.top = "-10000px";
+  iframe.style.left = "-10000px";
+  iframe.style.width = "80mm";
+  iframe.style.height = "0";
+  document.body.appendChild(iframe);
+
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (iframeDoc) {
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+    // Wait for content to render, then print
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      // Clean up after printing
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
+  }
 }
 
 const STATUS_FLOW = ["pending_acceptance", "new", "preparing", "ready", "delivered", "collected"] as const;
@@ -654,7 +798,7 @@ export default function Kitchen() {
                       {/* Order Header */}
                       <div className="p-4 border-b border-orange-100 bg-orange-50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono font-bold text-sm">{s(order.orderNumber)}</span>
+                          <span className="font-mono font-bold text-lg text-[#E31837]">{formatDailyNumber(order)}</span>
                           <Badge className={`${STATUS_COLORS["pending_acceptance"]} border`}>
                             NEW ORDER
                           </Badge>
@@ -705,7 +849,18 @@ export default function Kitchen() {
 
                       {/* Total & Accept/Reject Buttons */}
                       <div className="p-4 bg-orange-50 border-t border-orange-200 flex items-center justify-between">
-                        <span className="font-bold text-lg">£{Number(order.total || 0).toFixed(2)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-lg">£{Number(order.total || 0).toFixed(2)}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => printReceipt(order)}
+                            className="border-gray-300 text-gray-600 hover:bg-gray-100 px-2"
+                            title="Print receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </Button>
+                        </div>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
@@ -750,7 +905,7 @@ export default function Kitchen() {
                     {/* Order Header */}
                     <div className="p-4 border-b border-gray-100">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono font-bold text-sm">{s(order.orderNumber)}</span>
+                        <span className="font-mono font-bold text-lg text-[#E31837]">{formatDailyNumber(order)}</span>
                         <Badge className={`${STATUS_COLORS[order.status] || ""} border`}>
                           {s(STATUS_LABELS[order.status] || order.status)}
                         </Badge>
@@ -799,7 +954,18 @@ export default function Kitchen() {
 
                     {/* Total & Action */}
                     <div className="p-4 bg-gray-50 border-t flex items-center justify-between">
-                      <span className="font-bold">£{Number(order.total || 0).toFixed(2)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">£{Number(order.total || 0).toFixed(2)}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => printReceipt(order)}
+                          className="border-gray-300 text-gray-600 hover:bg-gray-100 px-2"
+                          title="Print receipt"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </Button>
+                      </div>
                       {nextStatus && (
                         <Button
                           size="sm"
@@ -824,7 +990,7 @@ export default function Kitchen() {
                 {completedOrders.slice(-12).reverse().map(order => (
                   <div key={order.id} className="bg-white rounded-lg p-3 opacity-60">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-medium">{s(order.orderNumber)}</span>
+                      <span className="font-mono text-sm font-medium">{formatDailyNumber(order)}</span>
                       <Badge variant="outline" className="text-xs">
                         {s(STATUS_LABELS[order.status] || order.status)}
                       </Badge>

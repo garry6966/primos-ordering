@@ -12,6 +12,7 @@ import {
   createCategory, deleteCategory,
   getOffers, getActiveOffer, createOffer, toggleOffer, deleteOffer,
   getDeliverySettings, updateDeliverySettings,
+  getNextDailyNumber,
 } from "./db";
 import OpenAI from "openai";
 import { nanoid } from "nanoid";
@@ -119,6 +120,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const orderNumber = `PRM-${nanoid(6).toUpperCase()}`;
+        const dailyNumber = await getNextDailyNumber();
 
         // Handle loyalty redemption
         let actualTotal = input.total;
@@ -146,6 +148,7 @@ export const appRouter = router({
           notes: input.notes,
           loyaltyRedemption,
           paymentStatus: "paid",
+          dailyNumber,
         });
 
         // Award loyalty stamp if actual spend (subtotal minus discounts, excluding delivery) >= £30
