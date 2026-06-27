@@ -22,9 +22,9 @@ const SLIDES = [
   {
     bgClass: "hp-slide-bg-2",
     eyebrow: "Signature Burgers",
-    headlineLines: ["SMASHED", "TO PERFECTION."],
-    headlineRed: [false, true],
-    sub: "Classic. Cosmic. Superstar. Hot One. Big Smoke. Whatever you're feeling — we've got it built bold.",
+    headlineLines: ["SMASHED", "TO", "PERFECTION"],
+    headlineRed: [false, false, true],
+    sub: "",
     ctas: [{ href: "/menu?cat=beef-burgers", label: "View Burgers", primary: true }],
   },
   {
