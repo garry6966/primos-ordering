@@ -12,7 +12,7 @@ const SLIDES = [
     bgClass: "hp-slide-bg-1",
     eyebrow: "Edinburgh's Finest",
     headlineLines: ["BURGERS", "PIZZA", "LOADED FRIES", "PARMESANS"],
-    headlineRed: [false, true, false, false],
+    headlineRed: [false, true, false, true],
     sub: "",
     ctas: [
       { href: "/menu", label: "Order Now", primary: true },
