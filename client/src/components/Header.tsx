@@ -9,8 +9,8 @@ export default function Header({ onCartClick }: { onCartClick?: () => void }) {
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
       <div className="container flex items-center justify-between h-16">
-        <Link href="/">
-          <span className="logo-text text-2xl md:text-3xl cursor-pointer select-none">
+        <Link href="/" className="no-underline">
+          <span className="logo-text text-2xl md:text-3xl cursor-pointer select-none transition-opacity hover:opacity-80" title="Back to homepage">
             PRIMO'S
           </span>
         </Link>
