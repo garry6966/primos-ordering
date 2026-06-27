@@ -1,6 +1,7 @@
 import { ShoppingBag, User, Stamp } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { Link, useLocation } from "wouter";
+import OpenClosedBadge from "@/components/OpenClosedBadge";
 
 export default function Header({ onCartClick }: { onCartClick?: () => void }) {
   const { itemCount } = useCart();
@@ -9,11 +10,15 @@ export default function Header({ onCartClick }: { onCartClick?: () => void }) {
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
       <div className="container flex items-center justify-between h-16">
-        <Link href="/" className="no-underline">
-          <span className="logo-text text-2xl md:text-3xl cursor-pointer select-none transition-opacity hover:opacity-80" title="Back to homepage">
-            PRIMO'S
-          </span>
-        </Link>
+        {/* Logo + open/closed badge grouped together */}
+        <div className="flex items-center gap-2">
+          <Link href="/" className="no-underline">
+            <span className="logo-text text-2xl md:text-3xl cursor-pointer select-none transition-opacity hover:opacity-80" title="Back to homepage">
+              PRIMO'S
+            </span>
+          </Link>
+          <OpenClosedBadge />
+        </div>
 
         <nav className="flex items-center gap-2 md:gap-4">
           {location !== "/menu" && (

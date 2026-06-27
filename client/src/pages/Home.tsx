@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import ClosedBanner from "@/components/ClosedBanner";
-import OpenClosedBadge from "@/components/OpenClosedBadge";
 import { trpc } from "@/lib/trpc";
 import { Star } from "lucide-react";
 import ReviewSummary from "@/components/ReviewSummary";
@@ -547,8 +546,6 @@ export default function Home() {
         </footer>
       </div>
 
-      {/* Floating open/closed burger badge */}
-      <OpenClosedBadge />
     </>
   );
 }
