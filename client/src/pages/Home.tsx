@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import ClosedBanner from "@/components/ClosedBanner";
+import OpenClosedBadge from "@/components/OpenClosedBadge";
 import { trpc } from "@/lib/trpc";
 import { Star } from "lucide-react";
 import ReviewSummary from "@/components/ReviewSummary";
@@ -298,7 +299,10 @@ export default function Home() {
 
         {/* NAV */}
         <nav className="hp-nav" role="navigation" aria-label="Main navigation">
-          <Link href="/" className="hp-nav-logo">PRIMO'S</Link>
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <Link href="/" className="hp-nav-logo">PRIMO'S</Link>
+            <OpenClosedBadge />
+          </div>
           <ul className={`hp-nav-links${navOpen ? " hp-open" : ""}`}>
             <li><a href="#menu" onClick={e => { e.preventDefault(); setNavOpen(false); document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' }); }}>Menu</a></li>
             <li><a href="#info" onClick={e => { e.preventDefault(); setNavOpen(false); document.getElementById('info')?.scrollIntoView({ behavior: 'smooth' }); }}>Hours</a></li>
