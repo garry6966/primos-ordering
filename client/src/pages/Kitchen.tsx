@@ -329,6 +329,17 @@ export default function Kitchen() {
     }
   };
 
+  // Load delivery settings into local state when data arrives
+  useEffect(() => {
+    if (deliverySettingsData && !deliverySettingsLoaded) {
+      setDeliveryMaxRadius(String(deliverySettingsData.maxRadiusMiles || ""));
+      setDeliveryFreeThreshold(String(deliverySettingsData.freeDeliveryThreshold || ""));
+      const rawTiers = Array.isArray(deliverySettingsData.tiers) ? deliverySettingsData.tiers : [];
+      setDeliveryTiers(rawTiers.map((t: any) => ({ maxMiles: Number(t?.maxMiles || 0), fee: Number(t?.fee || 0) })));
+      setDeliverySettingsLoaded(true);
+    }
+  }, [deliverySettingsData, deliverySettingsLoaded]);
+
   // === EARLY RETURN (login screen) ===
   if (!authenticated) {
     return (
@@ -471,17 +482,6 @@ export default function Kitchen() {
     refetchCategories();
     refetchMenuItems();
   };
-
-  // Load delivery settings into local state when data arrives
-  useEffect(() => {
-    if (deliverySettingsData && !deliverySettingsLoaded) {
-      setDeliveryMaxRadius(String(deliverySettingsData.maxRadiusMiles || ""));
-      setDeliveryFreeThreshold(String(deliverySettingsData.freeDeliveryThreshold || ""));
-      const rawTiers = Array.isArray(deliverySettingsData.tiers) ? deliverySettingsData.tiers : [];
-      setDeliveryTiers(rawTiers.map((t: any) => ({ maxMiles: Number(t?.maxMiles || 0), fee: Number(t?.fee || 0) })));
-      setDeliverySettingsLoaded(true);
-    }
-  }, [deliverySettingsData, deliverySettingsLoaded]);
 
   // Offers handlers
   const handleCreateOffer = async () => {
