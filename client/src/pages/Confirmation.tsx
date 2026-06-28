@@ -30,9 +30,10 @@ export default function Confirmation() {
   const paymentStatus = order ? (order as any).paymentStatus : null;
   const orderStatus = order ? order.status : null;
 
-  const isWaitingForAcceptance = orderStatus === "pending_acceptance" && (paymentStatus === "authorized" || paymentStatus === "pending");
-  const isConfirmed = ["new", "preparing", "ready", "delivered", "collected"].includes(orderStatus || "") && paymentStatus === "paid";
-  const isRejected = orderStatus === "rejected" && paymentStatus === "cancelled";
+  const orderPaymentMethod = order ? (order as any).paymentMethod : null;
+  const isWaitingForAcceptance = orderStatus === "pending_acceptance" && (paymentStatus === "authorized" || paymentStatus === "pending" || (paymentStatus === "paid" && orderPaymentMethod === "cash"));
+  const isConfirmed = ["new", "preparing", "ready", "delivered", "collected"].includes(orderStatus || "") && (paymentStatus === "paid" || orderPaymentMethod === "cash");
+  const isRejected = orderStatus === "rejected" && (paymentStatus === "cancelled" || orderPaymentMethod === "cash");
   // Order not yet in DB (webhook hasn't fired yet)
   const isWaitingForWebhook = !order;
 
@@ -76,7 +77,9 @@ export default function Confirmation() {
 
             <div className="mt-4 flex items-center justify-center gap-1.5 text-orange-600 text-sm font-medium">
               <Clock className="w-4 h-4" />
-              Your card has been authorized — you will only be charged once the restaurant accepts.
+              {orderPaymentMethod === "cash"
+                ? "Please have cash ready — payment will be collected on " + (order?.orderType === "delivery" ? "delivery" : "collection") + "."
+                : "Your card has been authorized — you will only be charged once the restaurant accepts."}
             </div>
 
             {/* Pulsing indicator */}
@@ -104,7 +107,7 @@ export default function Confirmation() {
 
             <div className="mt-3 flex items-center justify-center gap-1.5 text-green-600 text-sm font-medium">
               <CreditCard className="w-4 h-4" />
-              Payment confirmed
+              {orderPaymentMethod === "cash" ? "Cash payment — pay on " + (order?.orderType === "delivery" ? "delivery" : "collection") : "Payment confirmed"}
             </div>
           </div>
         )}
@@ -122,9 +125,11 @@ export default function Confirmation() {
               {displayNumber}
             </p>
 
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
-              Your card has NOT been charged. The hold has been released.
-            </div>
+            {orderPaymentMethod !== "cash" && (
+              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
+                Your card has NOT been charged. The hold has been released.
+              </div>
+            )}
 
             <p className="mt-3 text-sm text-gray-500">
               Please try again later or call us on 0131 563 4457.

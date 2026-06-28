@@ -9,7 +9,7 @@ import Header from "@/components/Header";
 import CartDrawer from "@/components/CartDrawer";
 import ClosedBanner, { useIsOpen } from "@/components/ClosedBanner";
 import { useLocation } from "wouter";
-import { ArrowLeft, Truck, Store, Minus, Plus, Trash2, Stamp, Gift, Tag, MapPin, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Truck, Store, Minus, Plus, Trash2, Stamp, Gift, Tag, MapPin, Loader2, AlertCircle, CreditCard, Banknote } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Checkout() {
@@ -27,6 +27,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [redeemStamps, setRedeemStamps] = useState(false);
   const [loyaltyChecked, setLoyaltyChecked] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
 
   // Delivery auto-detection state
   const [deliveryCalcLoading, setDeliveryCalcLoading] = useState(false);
@@ -162,47 +163,64 @@ export default function Checkout() {
 
     setSubmitting(true);
     try {
-      // Create Stripe Checkout Session via our API
-      const response = await fetch("/api/stripe/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: name.trim(),
-          customerPhone: phone.trim(),
-          customerEmail: email.trim() || undefined,
-          orderType,
-          deliveryAddress: orderType === "delivery" ? address.trim() : undefined,
-          deliveryFee,
-          subtotal,
-          total,
-          items: items.map(item => ({
-            menuItemId: item.menuItemId,
-            name: item.name,
-            basePrice: item.basePrice,
-            quantity: item.quantity,
-            toppings: item.toppings?.map(t => ({ name: t.name, price: t.price })),
-            mealDeal: item.mealDeal || null,
-            mealDealPrice: item.mealDealPrice,
-            totalPrice: item.totalPrice,
-          })),
-          notes: notes.trim() || undefined,
-          redeemStamps: redeemStamps && loyalty?.canRedeem ? true : false,
-          discountPercent: activeOffer?.discountPercent || 0,
-          discountAmount: offerDiscountRounded,
-        }),
-      });
+      const orderPayload = {
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        customerEmail: email.trim() || undefined,
+        orderType,
+        deliveryAddress: orderType === "delivery" ? address.trim() : undefined,
+        deliveryFee,
+        subtotal,
+        total,
+        items: items.map(item => ({
+          menuItemId: item.menuItemId,
+          name: item.name,
+          basePrice: item.basePrice,
+          quantity: item.quantity,
+          toppings: item.toppings?.map(t => ({ name: t.name, price: t.price })),
+          mealDeal: item.mealDeal || null,
+          mealDealPrice: item.mealDealPrice,
+          totalPrice: item.totalPrice,
+        })),
+        notes: notes.trim() || undefined,
+        redeemStamps: redeemStamps && loyalty?.canRedeem ? true : false,
+        discountPercent: activeOffer?.discountPercent || 0,
+        discountAmount: offerDiscountRounded,
+      };
 
-      const data = await response.json();
+      if (paymentMethod === "cash") {
+        // Cash order — submit directly, no Stripe
+        const response = await fetch("/api/orders/cash", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderPayload),
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create payment session");
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to place order");
+        }
+
+        clearCart();
+        navigate(`/confirmation/${data.orderNumber}`);
+      } else {
+        // Card order — redirect to Stripe Checkout (existing flow)
+        const response = await fetch("/api/stripe/create-checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderPayload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to create payment session");
+        }
+
+        clearCart();
+        window.location.href = data.url;
       }
-
-      // Clear cart before redirect (it will be gone when they come back)
-      clearCart();
-
-      // Redirect to Stripe Checkout
-      window.location.href = data.url;
     } catch (err: any) {
       toast.error(err.message || "Failed to proceed to payment. Please try again.");
     } finally {
@@ -494,13 +512,51 @@ export default function Checkout() {
             </div>
           )}
 
+          {/* Payment Method Selector */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <h2 className="font-semibold mb-3">Payment Method</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("card")}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 font-medium transition-all ${
+                  paymentMethod === "card"
+                    ? "border-[#E31837] bg-red-50 text-[#E31837]"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                Pay by Card
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("cash")}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 font-medium transition-all ${
+                  paymentMethod === "cash"
+                    ? "border-[#E31837] bg-red-50 text-[#E31837]"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                }`}
+              >
+                <Banknote className="w-5 h-5" />
+                Pay Cash
+              </button>
+            </div>
+            {paymentMethod === "cash" && (
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Please have the exact amount ready. Payment will be collected on {orderType === "delivery" ? "delivery" : "collection"}.
+              </p>
+            )}
+          </div>
+
           {/* Submit */}
           <Button
             type="submit"
             disabled={submitting || items.length === 0 || (orderType === "delivery" && (!deliveryCalcResult || !deliveryCalcResult.withinRadius))}
             className="w-full bg-[#E31837] hover:bg-[#c01530] text-white font-bold py-6 text-base rounded-xl shadow-lg disabled:opacity-50"
           >
-            {submitting ? "Redirecting to payment..." : `Pay Now — £${total.toFixed(2)}`}
+            {submitting
+              ? (paymentMethod === "cash" ? "Placing order..." : "Redirecting to payment...")
+              : (paymentMethod === "cash" ? `Place Order — £${total.toFixed(2)}` : `Pay Now — £${total.toFixed(2)}`)}
           </Button>
         </form>
       </div>

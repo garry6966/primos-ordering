@@ -216,6 +216,7 @@ export async function createOrder(data: {
   loyaltyRedemption?: boolean;
   stripeSessionId?: string;
   paymentStatus?: "pending" | "paid" | "failed" | "authorized" | "cancelled";
+  paymentMethod?: "card" | "cash";
   discountPercent?: number;
   discountAmount?: string;
   dailyNumber?: number;
@@ -241,6 +242,7 @@ export async function createOrder(data: {
     loyaltyRedemption: data.loyaltyRedemption || false,
     stripeSessionId: data.stripeSessionId || null,
     paymentStatus: data.paymentStatus || "pending",
+    paymentMethod: data.paymentMethod || "card",
     status: "pending_acceptance",
     discountPercent: data.discountPercent || 0,
     discountAmount: data.discountAmount || "0.00",

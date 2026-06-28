@@ -93,6 +93,7 @@ async function runMigrations() {
       { name: 'discountPercent', def: 'INT DEFAULT 0' },
       { name: 'discountAmount', def: "DECIMAL(8,2) DEFAULT '0.00'" },
       { name: 'dailyNumber', def: 'INT DEFAULT NULL' },
+      { name: 'paymentMethod', def: "VARCHAR(10) NOT NULL DEFAULT 'card'" },
     ];
     for (const col of orderCols) {
       try {
@@ -549,6 +550,135 @@ async function startServer() {
     } catch (error: any) {
       console.error("[Delivery Calculate] Error:", error);
       return res.status(500).json({ error: "Failed to calculate delivery fee" });
+    }
+  });
+
+  // Cash order endpoint — creates order directly without Stripe
+  app.post("/api/orders/cash", async (req, res) => {
+    try {
+      const {
+        customerName,
+        customerPhone,
+        customerEmail,
+        orderType,
+        deliveryAddress,
+        deliveryFee,
+        subtotal,
+        total,
+        items,
+        notes,
+        redeemStamps,
+        discountPercent,
+        discountAmount,
+      } = req.body;
+
+      if (!customerName || !customerPhone || !items || items.length === 0) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const { nanoid } = await import("nanoid");
+      const { createOrder, getNextDailyNumber, redeemLoyaltyStamps, awardLoyaltyStamp, markLoyaltyStampsAwarded, getDeliverySettings } = await import("./db");
+      const { sendOrderNotificationEmail } = await import("./email");
+      const { sendPushNotification } = await import("./push");
+
+      // Server-side delivery fee validation for delivery orders
+      let validatedDeliveryFee = deliveryFee || 0;
+      if (orderType === "delivery" && deliveryAddress) {
+        try {
+          const settings = await getDeliverySettings();
+          const freeThreshold = settings ? parseFloat(settings.freeDeliveryThreshold) : 30.0;
+          if (subtotal >= freeThreshold) {
+            validatedDeliveryFee = 0;
+          }
+        } catch (err: any) {
+          console.warn("[Cash Order] Delivery fee validation failed, using client value:", err.message);
+        }
+      }
+
+      const orderNumber = `PRM-${nanoid(6).toUpperCase()}`;
+      const dailyNumber = await getNextDailyNumber();
+      const finalTotal = Math.max(0, subtotal + validatedDeliveryFee - (discountAmount || 0) - (redeemStamps ? 10 : 0));
+
+      const order = await createOrder({
+        orderNumber,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerEmail: customerEmail?.trim() || undefined,
+        orderType: orderType || "collection",
+        deliveryAddress: orderType === "delivery" ? deliveryAddress?.trim() : undefined,
+        deliveryFee: validatedDeliveryFee.toFixed(2),
+        subtotal: subtotal.toFixed(2),
+        total: finalTotal.toFixed(2),
+        items,
+        notes: notes?.trim() || undefined,
+        loyaltyRedemption: redeemStamps || false,
+        paymentStatus: "paid", // Cash is considered paid immediately
+        paymentMethod: "cash",
+        discountPercent: discountPercent || 0,
+        discountAmount: (discountAmount || 0).toFixed(2),
+        dailyNumber,
+      });
+
+      if (order) {
+        // Handle loyalty redemption
+        if (redeemStamps && order.customerEmail) {
+          try {
+            await redeemLoyaltyStamps(order.customerEmail);
+          } catch (e) {
+            console.warn("[Cash Order] Loyalty redemption failed:", e);
+          }
+        }
+
+        // Award loyalty stamp for cash orders (since payment is immediate)
+        const actualSpend = parseFloat(order.subtotal) - parseFloat(order.discountAmount || "0");
+        if (order.customerEmail && actualSpend >= 30 && !order.loyaltyStampsAwarded) {
+          try {
+            await awardLoyaltyStamp(order.customerEmail);
+            await markLoyaltyStampsAwarded(order.id);
+          } catch (e) {
+            console.warn("[Cash Order] Loyalty award failed:", e);
+          }
+        }
+
+        // Notify kitchen dashboard via SSE
+        notifyNewOrder(order);
+
+        // Send push notification to kitchen devices
+        sendPushNotification({
+          title: `\uD83C\uDF55 New Order #${String(dailyNumber).padStart(3, "0")}`,
+          body: `${order.customerName} \u2014 ${order.orderType === "delivery" ? "Delivery" : "Collection"} \u2014 \u00A3${parseFloat(order.total).toFixed(2)} (CASH)`,
+          orderNumber: order.orderNumber,
+        }).catch(err => console.error("[Push] Notification failed:", err));
+
+        // Send email notification to restaurant
+        sendOrderNotificationEmail({
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerEmail: order.customerEmail,
+          orderType: order.orderType as "delivery" | "collection",
+          deliveryAddress: order.deliveryAddress,
+          items: (order.items as any[]).map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            totalPrice: item.totalPrice,
+            toppings: item.toppings,
+            mealDeal: item.mealDeal,
+          })),
+          subtotal: order.subtotal,
+          deliveryFee: order.deliveryFee,
+          total: order.total,
+          notes: order.notes,
+          createdAt: order.createdAt,
+        }).catch(err => console.error("[Email] Cash order notification error:", err));
+
+        res.json({ success: true, orderNumber: order.orderNumber });
+      } else {
+        res.status(500).json({ error: "Failed to create order" });
+      }
+    } catch (error: any) {
+      console.error("[Cash Order] Error:", error);
+      res.status(500).json({ error: error.message || "Failed to create cash order" });
     }
   });
 

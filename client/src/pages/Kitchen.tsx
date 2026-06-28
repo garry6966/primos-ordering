@@ -93,6 +93,7 @@ function printReceipt(order: any) {
     <body>
       <div class="order-number">${dailyNum}</div>
       <div class="order-type">${order.orderType === "delivery" ? "🚗 DELIVERY" : "🏪 COLLECTION"}</div>
+      <div class="order-type" style="font-size:14px; border-bottom: 1px dashed #000; padding-bottom: 6px;">${(order as any).paymentMethod === "cash" ? "💵 CASH PAYMENT" : "💳 CARD PAYMENT"}</div>
 
       <div class="section">
         <div><span class="info-label">Customer:</span> ${order.customerName}</div>
@@ -847,6 +848,10 @@ export default function Kitchen() {
                             ) : (
                               <span className="flex items-center gap-1"><Store className="w-3 h-3" /> Collection</span>
                             )}
+                            <span className="mx-1">|</span>
+                            <span className={`font-bold uppercase ${(order as any).paymentMethod === "cash" ? "text-green-700" : "text-blue-600"}`}>
+                              {(order as any).paymentMethod === "cash" ? "CASH" : "CARD"}
+                            </span>
                           </div>
                           {/* Auto-rejection countdown */}
                           <CountdownTimer createdAt={typeof order.createdAt === "object" ? (order.createdAt as any).toISOString?.() || String(order.createdAt) : String(order.createdAt)} />
@@ -951,6 +956,10 @@ export default function Kitchen() {
                           ) : (
                             <span className="flex items-center gap-1 text-blue-600 font-medium"><Store className="w-3 h-3" /> Collection</span>
                           )}
+                          <span className="mx-1">|</span>
+                          <span className={`font-bold uppercase ${(order as any).paymentMethod === "cash" ? "text-green-700" : "text-blue-600"}`}>
+                            {(order as any).paymentMethod === "cash" ? "CASH" : "CARD"}
+                          </span>
                         </div>
                       </div>
                       <Button
@@ -1043,7 +1052,7 @@ export default function Kitchen() {
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-400">
-                          {order.orderType} · {new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          {order.orderType} · {new Date(typeof order.createdAt === "object" ? String(order.createdAt) : order.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · <span className={`font-bold uppercase ${(order as any).paymentMethod === "cash" ? "text-green-700" : "text-blue-600"}`}>{(order as any).paymentMethod === "cash" ? "CASH" : "CARD"}</span>
                         </p>
                       </div>
                     </div>
